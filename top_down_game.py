@@ -54,6 +54,11 @@ LINKED_UPGRADES = {
         'name': 'Chain Lightning',
         'requires': ['speed_boost', 'extra_bounce'],  # Multiple prerequisites
         'modifiers': {'chain_lightning': 1}
+    },
+    'fork_lightning': {
+        'name': 'Fork Lightning',
+        'requires': {'upgrade': 'chain_lightning', 'level': 5},  # Chain lightning at level 5+
+        'modifiers': {'fork_lightning': 1}
     }
 }
 
@@ -250,7 +255,10 @@ class Particle:
 
     def cleanup(self):
         """Remove particle from canvas."""
-        self.canvas.delete(self.rect)
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Canvas item may have already been deleted
 
 class Shard:
     """
@@ -314,17 +322,15 @@ class Shard:
                     self.game.canvas.delete(enemy.rect)
                     self.game.score += 1
                     self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
-                    # Award XP for kill (7 for pentagon, 5 for triangle, 1 for regular)
-                    if is_pentagon:
-                        xp_reward = 7
-                    elif is_triangle:
-                        xp_reward = 5
-                    else:
-                        xp_reward = 1
-                    self.game.add_xp(xp_reward)
-                    play_beep_async(400, 30)
-                
-                # If explosive shrapnel, create explosion effect with more shards
+                # Award XP for kill (7 for pentagon, 3 for triangle, 1 for regular)
+                if is_pentagon:
+                    xp_reward = 7
+                elif is_triangle:
+                    xp_reward = 3
+                else:
+                    xp_reward = 1
+                self.game.add_xp(xp_reward)
+                play_beep_async(400, 30)                # If explosive shrapnel, create explosion effect with more shards
                 if self.explosive:
                     self.game.create_explosive_shrapnel(ex_center, ey_center)
                 
@@ -336,7 +342,10 @@ class Shard:
     
     def cleanup(self):
         """Remove shard from canvas."""
-        self.canvas.delete(self.rect)
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Canvas item may have already been deleted
 
 class Projectile:
     """
@@ -361,9 +370,11 @@ class Projectile:
         self.homing_strength = stats.get('homing', 0.15)
         self.speed = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
         self.chain_lightning_level = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
+        self.fork_lightning_level = stats.get('fork_lightning', 0)  # Fork lightning upgrade level
         self.current_target = self._find_closest_target()  # Initial target for homing
         self.time_alive = 0  # Track lifetime in milliseconds
         self.returning = False  # Whether projectile is returning to player
+        self.is_mini_fork = False  # Whether this is a mini-fork that can only chain once
 
     def update(self):
         """Update projectile position and check for collisions."""
@@ -464,11 +475,11 @@ class Projectile:
                 self.game.score += 1
                 self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
                 
-                # Award XP for kill (7 for pentagon, 5 for triangle, 1 for regular)
+                # Award XP for kill (7 for pentagon, 3 for triangle, 1 for regular)
                 if is_pentagon:
                     xp_reward = 7
                 elif is_triangle:
-                    xp_reward = 5
+                    xp_reward = 3
                 else:
                     xp_reward = 1
                 self.game.add_xp(xp_reward)
@@ -483,17 +494,17 @@ class Projectile:
             self.hit_enemies.add(id(closest_enemy))
             
             # Chain lightning: automatically bounce to nearby enemies (doesn't consume bounces)
-            if self.chain_lightning_level > 0:
+            if self.chain_lightning_level > 0 and not self.is_mini_fork:
                 # Find all nearby unhit enemies within range
                 chain_range = 100 + (50 * self.chain_lightning_level)  # 100 at level 1, 150 at level 2, 200 at level 3, etc
                 nearby_enemies = self._find_nearby_enemies_for_chain(chain_range)
                 
                 if nearby_enemies:
-                    # Pick the closest nearby enemy
-                    next_target = nearby_enemies[0]
+                    # Get the primary target (closest)
+                    primary_target = nearby_enemies[0]
                     
-                    # Draw lightning line from current position to target
-                    tx, ty = next_target.get_position()
+                    # Draw main chain lightning line to primary target
+                    tx, ty = primary_target.get_position()
                     tx_center = tx + ENEMY_SIZE // 2
                     ty_center = ty + ENEMY_SIZE // 2
                     line_id = self.game.canvas.create_line(
@@ -502,14 +513,32 @@ class Projectile:
                     )
                     
                     # Delete the line after a short delay (100ms)
-                    self.game.root.after(100, lambda: self.game.canvas.delete(line_id) if line_id else None)
+                    def delete_line():
+                        try:
+                            self.game.canvas.delete(line_id)
+                        except tk.TclError:
+                            pass  # Canvas item may have already been deleted
+                    self.game.root.after(100, delete_line)
                     
-                    # Move projectile directly to the target and treat it like a new frame
+                    # Create mini-forks to nearby enemies (if fork lightning is active and we have multiple targets)
+                    if self.fork_lightning_level > 0 and len(nearby_enemies) >= 2:
+                        # Create mini-forks to 1-2 nearby enemies (not the primary target)
+                        fork_targets = nearby_enemies[1:3]  # Up to 2 additional targets
+                        for fork_target in fork_targets:
+                            self._create_mini_fork(fork_target)
+                    
+                    # Move projectile directly to the primary target and treat it like a new frame
                     self.x = tx_center
                     self.y = ty_center
-                    self.current_target = next_target
+                    self.current_target = primary_target
                     self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
+                    
                     return True  # Continue updating next frame
+            
+            # Mini-fork chains end after one hit
+            if self.is_mini_fork:
+                self.returning = True
+                return True
             
             # Regular bouncing (only if we have bounces left)
             self.bounces += 1
@@ -588,6 +617,36 @@ class Projectile:
         # Return sorted by distance (closest first)
         return [enemy for dist, enemy in sorted(nearby, key=lambda x: x[0])]
     
+    def _create_mini_fork(self, target_enemy):
+        """Create a mini-fork lightning to a target enemy. Mini-forks only chain once."""
+        tx, ty = target_enemy.get_position()
+        tx_center = tx + ENEMY_SIZE // 2
+        ty_center = ty + ENEMY_SIZE // 2
+        
+        # Draw lightning line (magenta for mini-forks)
+        line_id = self.game.canvas.create_line(
+            self.x, self.y, tx_center, ty_center,
+            fill='magenta', width=1.5
+        )
+        
+        # Delete the line after a short delay
+        def delete_line():
+            try:
+                self.game.canvas.delete(line_id)
+            except tk.TclError:
+                pass
+        self.game.root.after(100, delete_line)
+        
+        # Create a new mini-fork projectile that stops after one chain
+        mini_fork_proj = Projectile(self.game.canvas, tx_center, ty_center, 0, 0, self.game)
+        mini_fork_proj.current_target = target_enemy
+        mini_fork_proj.hit_enemies = self.hit_enemies.copy()
+        mini_fork_proj.hit_enemies.add(id(target_enemy))  # Mark the target as already hit
+        mini_fork_proj.is_mini_fork = True  # Mark as mini-fork so it returns after one hit
+        mini_fork_proj.chain_lightning_level = 0  # Mini-forks don't chain
+        mini_fork_proj.fork_lightning_level = 0  # Mini-forks can't fork
+        self.game.projectiles.append(mini_fork_proj)
+    
     def _create_split_projectiles(self):
         """Create two split projectiles branching off at angles."""
         # Calculate current velocity angle
@@ -609,7 +668,10 @@ class Projectile:
     
     def cleanup(self):
         """Remove projectile from canvas."""
-        self.canvas.delete(self.rect)
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Canvas item may have already been deleted
 
 class Game:
     """
@@ -655,6 +717,9 @@ class Game:
         self.pause_menu_id = None  # Track pause menu rectangle
         self.pause_buttons = {}  # Track pause menu buttons
         self.pause_menu_elements = []  # Track all pause menu elements
+        self.dev_menu_active = False  # Whether dev testing menu is open
+        self.dev_menu_elements = []  # Track dev menu elements
+        self.dev_buttons = {}  # Track dev menu buttons
         self.ammo_orbs = []  # Track ammo orb canvas items
         self.ammo_rotation = 0  # Angle for orbiting ammo orbs
         self.root.after(50, self.update)
@@ -685,7 +750,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning']:
+                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'fork_lightning']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -725,14 +790,40 @@ class Game:
         return False
 
     def spawn_enemies(self):
-        """Create a new set of enemies at random positions."""
+        """Create a new set of enemies at random positions, scaled by level."""
         self.enemies.clear()
         initial_count = TESTING_MODE_ENEMY_COUNT if TESTING_MODE else INITIAL_ENEMY_COUNT
-        for _ in range(initial_count):
+        # Scale initial enemy count with level
+        level_scaled_count = int(initial_count * (1 + 0.15 * self.level))  # 15% increase per level
+        
+        for _ in range(level_scaled_count):
             x = random.randint(0, WIDTH-ENEMY_SIZE)
             y = random.randint(0, HEIGHT-ENEMY_SIZE)
+            self._spawn_enemy_by_level(x, y)
+    
+    def _spawn_enemy_by_level(self, x, y):
+        """Spawn an enemy with type based on current level."""
+        # Pentagon chance increases with level: 0% at level 0, 15% at level 10, 30% at level 20
+        pentagon_chance = min(0.3, 0.015 * self.level)
+        
+        # Triangle chance: starts at 30% at level 5, increases to 60% at level 20
+        # Before level 5, triangles don't spawn
+        if self.level >= 5:
+            triangle_chance = min(0.6, 0.3 + (0.015 * (self.level - 5)))
+        else:
+            triangle_chance = 0
+        
+        rand = random.random()
+        
+        # Determine enemy type based on weighted probabilities
+        if rand < pentagon_chance:
+            enemy = PentagonEnemy(self.canvas, x, y, ENEMY_SIZE)
+        elif rand < pentagon_chance + triangle_chance:
+            enemy = TriangleEnemy(self.canvas, x, y, ENEMY_SIZE)
+        else:
             enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
-            self.enemies.append(enemy)
+        
+        self.enemies.append(enemy)
     
     def get_current_respawn_interval(self):
         """Calculate respawn interval based on time played."""
@@ -741,30 +832,24 @@ class Game:
         return max(interval, RESPAWN_INTERVAL_MIN)
     
     def respawn_enemies(self, count):
-        """Spawn 'count' new enemies at random positions."""
-        # Increase max enemies based on time played
-        minutes_played = self.game_time_ms / 60000
-        scaling_factor = 1 + (minutes_played * 0.1)  # 10% increase per minute
-        max_enemies = int(MAX_ENEMY_COUNT * scaling_factor)
+        """Spawn 'count' new enemies at random positions with level-based scaling."""
+        # Increase max enemies based on level (not just time played)
+        base_max = MAX_ENEMY_COUNT
+        level_scaling = 1 + (0.1 * self.level)  # 10% increase per level
+        max_enemies = int(base_max * level_scaling)
+        
+        # Also increase respawn count with level
+        scaled_count = int(count * (1 + 0.05 * self.level))  # 5% increase per level
         
         if len(self.enemies) >= max_enemies:
             return
         
-        for _ in range(count):
+        for _ in range(scaled_count):
             if len(self.enemies) >= max_enemies:
                 break
             x = random.randint(0, WIDTH-ENEMY_SIZE)
             y = random.randint(0, HEIGHT-ENEMY_SIZE)
-            
-            # Spawn pentagon tank enemies starting at level 10 (5% chance)
-            if self.level >= 10 and random.random() < 0.05:
-                enemy = PentagonEnemy(self.canvas, x, y, ENEMY_SIZE)
-            # Spawn triangle enemies starting at level 5 (30% chance)
-            elif self.level >= 5 and random.random() < 0.3:
-                enemy = TriangleEnemy(self.canvas, x, y, ENEMY_SIZE)
-            else:
-                enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
-            self.enemies.append(enemy)
+            self._spawn_enemy_by_level(x, y)
 
     def on_respawn_timer(self):
         """Called when it's time to spawn a new batch of enemies."""
@@ -785,7 +870,18 @@ class Game:
         return angle
 
     def on_canvas_click(self, event):
-        """Handle canvas clicks - routes to upgrade menu or pause menu or attack."""
+        """Handle canvas clicks - routes to upgrade menu or pause menu or dev menu or attack."""
+        # If dev menu is open, handle dev button clicks
+        if self.dev_menu_active:
+            for action, btn_id in self.dev_buttons.items():
+                coords = self.canvas.coords(btn_id)
+                if coords and len(coords) >= 4:
+                    x1, y1, x2, y2 = coords
+                    if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                        self._handle_dev_menu_action(action)
+                        return
+            return  # Click outside buttons in dev menu does nothing
+        
         # If upgrade menu is open, handle upgrade button clicks
         if self.upgrade_menu_active:
             for upgrade_key, btn_id in self.upgrade_buttons.items():
@@ -808,6 +904,8 @@ class Game:
                             self.restart_game()
                         elif action == 'quit':
                             self.quit_game()
+                        elif action == 'dev':
+                            self.show_dev_menu()
                         return
             return  # Click outside buttons in pause menu does nothing
         
@@ -826,15 +924,29 @@ class Game:
             # Add linked upgrades if prerequisites are met
             for linked_key, linked_data in LINKED_UPGRADES.items():
                 requires = linked_data['requires']
-                # Handle both single and multiple prerequisites
-                if isinstance(requires, list):
+                can_unlock = False
+                
+                # Handle different requirement types
+                if isinstance(requires, dict):
+                    # Level-based requirement: {'upgrade': 'chain_lightning', 'level': 5}
+                    upgrade_name = requires.get('upgrade')
+                    required_level = requires.get('level', 1)
+                    
+                    # Count how many times this upgrade is owned (level)
+                    upgrade_count = self.active_upgrades.count(upgrade_name)
+                    if upgrade_count >= required_level:
+                        can_unlock = True
+                elif isinstance(requires, list):
                     # All prerequisites must be owned
                     if all(req in self.active_upgrades for req in requires):
-                        available_upgrades.append(linked_key)
+                        can_unlock = True
                 else:
-                    # Single prerequisite
+                    # Single prerequisite string
                     if requires in self.active_upgrades:
-                        available_upgrades.append(linked_key)
+                        can_unlock = True
+                
+                if can_unlock:
+                    available_upgrades.append(linked_key)
             
             self.upgrade_choices = random.sample(available_upgrades, min(3, len(available_upgrades)))
             
@@ -959,9 +1071,15 @@ class Game:
             # Count upgrades by type
             upgrade_counts = {}
             for upgrade_key in self.active_upgrades:
+                # Check regular upgrades first
                 if upgrade_key in WEAPON_UPGRADES:
                     upgrade_name = WEAPON_UPGRADES[upgrade_key]['name']
-                    upgrade_counts[upgrade_name] = upgrade_counts.get(upgrade_name, 0) + 1
+                # Then check linked upgrades
+                elif upgrade_key in LINKED_UPGRADES:
+                    upgrade_name = LINKED_UPGRADES[upgrade_key]['name']
+                else:
+                    continue  # Skip unknown upgrades
+                upgrade_counts[upgrade_name] = upgrade_counts.get(upgrade_name, 0) + 1
             
             # Format as "Upgrade x1, Upgrade x2" etc
             upgrades_text = ', '.join([f"{name} x{count}" for name, count in upgrade_counts.items()]) if upgrade_counts else 'None'
@@ -1023,10 +1141,141 @@ class Game:
         )
         self.pause_menu_elements.append(self.pause_buttons['quit'])
         self.pause_menu_elements.append(quit_text)
+        
+        # Hidden dev button (tiny, in corner)
+        self.pause_buttons['dev'] = self.canvas.create_rectangle(
+            overlay_x + overlay_width - 25, overlay_y,
+            overlay_x + overlay_width, overlay_y + 20,
+            fill='#333333', outline='gray', width=1
+        )
+        dev_text = self.canvas.create_text(
+            overlay_x + overlay_width - 12, overlay_y + 10,
+            text='DEV',
+            fill='gray',
+            font=('Arial', 8)
+        )
+        self.pause_menu_elements.append(self.pause_buttons['dev'])
+        self.pause_menu_elements.append(dev_text)
 
     def quit_game(self):
         """Close the game window and exit."""
         self.root.destroy()
+    
+    def show_dev_menu(self):
+        """Display the developer testing menu."""
+        self.dev_menu_active = True
+        
+        # Create overlay
+        menu_size = min(WIDTH, HEIGHT) * 0.6
+        overlay_x = (WIDTH - menu_size) // 2
+        overlay_y = (HEIGHT - menu_size) // 2
+        overlay_width = menu_size
+        overlay_height = menu_size
+        
+        # Background rectangle
+        overlay_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + overlay_width, overlay_y + overlay_height,
+            fill='#1a1a3e', outline='magenta', width=3
+        )
+        self.dev_menu_elements.append(overlay_id)
+        
+        # Title
+        title = self.canvas.create_text(
+            WIDTH // 2, overlay_y + 20,
+            text='DEV TESTING MENU',
+            fill='magenta',
+            font=('Arial', 20, 'bold')
+        )
+        self.dev_menu_elements.append(title)
+        
+        # Button definitions: (label, action, color)
+        buttons = [
+            ('Add Extra Bounce', 'upgrade_extra_bounce', '#4a4a8a'),
+            ('Add Shrapnel', 'upgrade_shrapnel', '#4a4a8a'),
+            ('Add Speed Boost', 'upgrade_speed_boost', '#4a4a8a'),
+            ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
+            ('Add Fork Lightning', 'upgrade_fork_lightning', '#4a4a8a'),
+            ('Level Up', 'level_up', '#8a4a4a'),
+            ('Add 100 XP', 'add_xp', '#8a4a4a'),
+            ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
+            ('Back', 'back_to_pause', '#4a4a4a'),
+        ]
+        
+        button_width = overlay_width - 40
+        button_height = 35
+        button_spacing = 5
+        start_y = overlay_y + 55
+        
+        for i, (label, action, color) in enumerate(buttons):
+            btn_y = start_y + i * (button_height + button_spacing)
+            
+            btn_x1 = int(overlay_x + 20)
+            btn_y1 = int(btn_y)
+            btn_x2 = int(overlay_x + 20 + button_width)
+            btn_y2 = int(btn_y + button_height)
+            
+            btn_id = self.canvas.create_rectangle(
+                btn_x1, btn_y1,
+                btn_x2, btn_y2,
+                fill=color, outline='white', width=1
+            )
+            self.dev_buttons[action] = btn_id
+            self.dev_menu_elements.append(btn_id)
+            
+            text_id = self.canvas.create_text(
+                WIDTH // 2, btn_y1 + button_height // 2,
+                text=label,
+                fill='white',
+                font=('Arial', 12)
+            )
+            self.dev_menu_elements.append(text_id)
+    
+    def _handle_dev_menu_action(self, action):
+        """Handle dev menu button actions."""
+        try:
+            if action == 'upgrade_extra_bounce':
+                self.add_upgrade('extra_bounce')
+            elif action == 'upgrade_shrapnel':
+                self.add_upgrade('shrapnel')
+            elif action == 'upgrade_speed_boost':
+                self.add_upgrade('speed_boost')
+            elif action == 'upgrade_chain_lightning':
+                self.add_upgrade('chain_lightning')
+            elif action == 'upgrade_fork_lightning':
+                self.add_upgrade('fork_lightning')
+            elif action == 'level_up':
+                self.level += 1
+                self.xp_for_next_level = int(self.xp_for_next_level * 1.35)
+                self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
+            elif action == 'add_xp':
+                self.add_xp(100)
+            elif action == 'spawn_enemies_cmd':
+                self.respawn_enemies(30)
+            elif action == 'back_to_pause':
+                self.close_dev_menu()
+                return
+            
+            # Close dev menu and return to pause menu after action
+            self.close_dev_menu()
+        except Exception as e:
+            print(f"Error in dev action '{action}': {e}")
+
+    def close_dev_menu(self):
+        """Close the dev menu and return to pause menu."""
+        for element_id in self.dev_menu_elements:
+            try:
+                self.canvas.delete(element_id)
+            except tk.TclError:
+                pass
+        
+        self.dev_menu_elements = []
+        self.dev_buttons = {}
+        self.dev_menu_active = False
+        
+        # Close and reopen pause menu to refresh upgrade display
+        self.close_pause_menu()
+        self.show_pause_menu()
 
     def hide_pause_menu(self):
         """Hide the pause menu and resume the game."""
@@ -1075,7 +1324,7 @@ class Game:
         self.computed_weapon_stats = self.compute_weapon_stats()
         self.xp = 0
         self.level = 0
-        self.xp_for_next_level = 30
+        self.xp_for_next_level = 10
         self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
         self.enemies = []
         self.spawn_enemies()
@@ -1258,12 +1507,16 @@ class Game:
         # Fixed ammo value - always 1 orb
         max_ammo = 1
         
-        # Calculate available ammo (max - active projectiles)
-        available_ammo = max_ammo - len(self.projectiles)
+        # Calculate available ammo (max - active main projectiles, not counting mini-forks)
+        main_projectile_count = sum(1 for p in self.projectiles if not p.is_mini_fork)
+        available_ammo = max_ammo - main_projectile_count
         
         # Remove old orbs
         for orb_id in self.ammo_orbs:
-            self.canvas.delete(orb_id)
+            try:
+                self.canvas.delete(orb_id)
+            except tk.TclError:
+                pass  # Already deleted
         self.ammo_orbs = []
         
         # Update rotation angle
