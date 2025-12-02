@@ -18,7 +18,7 @@ if exist TopDownGame.spec del TopDownGame.spec
 
 echo.
 echo Building executable...
-"%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "TopDownGame" ^
+"%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "yoyo-game" ^
     --icon=NONE ^
     --distpath=dist ^
     --workpath=build ^
