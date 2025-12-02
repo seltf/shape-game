@@ -58,11 +58,6 @@ LINKED_UPGRADES = {
         'name': 'Chain Lightning',
         'requires': ['speed_boost', 'extra_bounce'],  # Multiple prerequisites
         'modifiers': {'chain_lightning': 1}
-    },
-    'fork_lightning': {
-        'name': 'Fork Lightning',
-        'requires': {'upgrade': 'chain_lightning', 'level': 5},  # Chain lightning at level 5+
-        'modifiers': {'fork_lightning': 1}
     }
 }
 
@@ -596,7 +591,6 @@ class Projectile:
         self.homing_strength = stats.get('homing', 0.15)
         self.speed = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
         self.chain_lightning_level = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
-        self.fork_lightning_level = stats.get('fork_lightning', 0)  # Fork lightning upgrade level
         self.current_target = self._find_closest_target()  # Initial target for homing
         self.time_alive = 0  # Track lifetime in milliseconds
         self.returning = False  # Whether projectile is returning to player
@@ -719,98 +713,66 @@ class Projectile:
             # Mark as hit
             self.hit_enemies.add(id(closest_enemy))
             
-            # Chain lightning: ONE BIG ZAP that instantly strikes all nearby enemies and returns
+            # Chain lightning: On initial hit, trigger a chain through level number of targets
             if self.chain_lightning_level > 0 and not self.is_mini_fork:
-                # Find all nearby unhit enemies within range
-                chain_range = 100 + (50 * self.chain_lightning_level)  # 100 at level 1, 150 at level 2, 200 at level 3, etc
-                nearby_enemies = self._find_nearby_enemies_for_chain(chain_range)
+                # Number of targets to chain through: equal to chain_lightning_level (level 1 = 1 chain, etc.)
+                num_chain_targets = self.chain_lightning_level
                 
-                if nearby_enemies:
-                    # Build an aesthetically pleasing lightning path using greedy forward-biased selection
-                    lightning_path = [(self.x, self.y)]  # Start from current projectile position
-                    lightning_targets = []
-                    visited = set()
-                    visited.add(id(closest_enemy))  # Already hit the first enemy
+                # Starting range: 150 + (60 * level), decreases by only 20% per bounce
+                chain_range = 150 + (60 * self.chain_lightning_level)
+                range_multiplier = 0.8  # Each chain reduces range to 80% of previous
+                current_range = chain_range
+                
+                # Build chain path from current enemy, finding closest unhit enemies within range
+                chain_targets = []
+                current_position = (closest_enemy.get_position()[0] + ENEMY_SIZE // 2,
+                                  closest_enemy.get_position()[1] + ENEMY_SIZE // 2)
+                
+                for bounce_index in range(num_chain_targets):
+                    # Find closest unhit enemy to current position within current range
+                    next_target = None
+                    next_dist = float('inf')
                     
-                    current_pos = (self.x, self.y)
-                    
-                    # Greedily select next targets based on forward bias and distance
-                    while len(visited) < len(nearby_enemies) + 1:  # +1 because we already hit first enemy
-                        remaining_enemies = [e for e in nearby_enemies if id(e) not in visited]
-                        if not remaining_enemies:
-                            break
-                        
-                        # Score each remaining enemy based on:
-                        # 1. Direction preference (prefer targets ahead in current direction)
-                        # 2. Distance (prefer closer targets)
-                        best_enemy = None
-                        best_score = float('-inf')
-                        
-                        for enemy in remaining_enemies:
-                            ex, ey = enemy.get_position()
-                            ex_center = ex + ENEMY_SIZE // 2
-                            ey_center = ey + ENEMY_SIZE // 2
-                            
-                            # Vector from current position to this enemy
-                            dx = ex_center - current_pos[0]
-                            dy = ey_center - current_pos[1]
-                            dist = math.hypot(dx, dy)
-                            
-                            if dist == 0:
-                                continue
-                            
-                            # Get current direction (from projectile velocity or previous chain direction)
-                            if len(lightning_targets) == 0 and (abs(self.vx) > 0 or abs(self.vy) > 0):
-                                # Use projectile direction
-                                current_dir_x = self.vx
-                                current_dir_y = self.vy
-                            elif len(lightning_targets) > 0:
-                                # Use direction of last chain segment
-                                prev_pos = lightning_path[-1]
-                                current_dir_x = prev_pos[0] - lightning_path[-2][0]
-                                current_dir_y = prev_pos[1] - lightning_path[-2][1]
-                            else:
-                                # No direction info, use zero
-                                current_dir_x, current_dir_y = 0, 0
-                            
-                            # Normalize direction
-                            dir_len = math.hypot(current_dir_x, current_dir_y)
-                            if dir_len > 0:
-                                current_dir_x /= dir_len
-                                current_dir_y /= dir_len
-                            
-                            # Dot product: how much target is ahead of current direction (-1 to 1)
-                            # +1 = directly ahead, 0 = perpendicular, -1 = directly behind
-                            dot_product = (dx / dist) * current_dir_x + (dy / dist) * current_dir_y
-                            
-                            # Score: prefer forward targets (boost by dot product), closer is better
-                            # Forward bias factor: 0.5 multiplier on distance to emphasize direction
-                            forward_bonus = max(0, dot_product)  # Only reward forward (0 to 1)
-                            distance_score = -dist  # Closer is better
-                            score = forward_bonus * 100 + distance_score * 0.5
-                            
-                            if score > best_score:
-                                best_score = score
-                                best_enemy = enemy
-                        
-                        if best_enemy is None:
-                            break
-                        
-                        # Add to path
-                        ex, ey = best_enemy.get_position()
+                    for enemy in self.game.enemies:
+                        if id(enemy) in self.hit_enemies:
+                            continue
+                        ex, ey = enemy.get_position()
                         ex_center = ex + ENEMY_SIZE // 2
                         ey_center = ey + ENEMY_SIZE // 2
-                        lightning_path.append((ex_center, ey_center))
-                        lightning_targets.append(best_enemy)
-                        visited.add(id(best_enemy))
-                        current_pos = (ex_center, ey_center)
+                        
+                        dist = math.hypot(ex_center - current_position[0], ey_center - current_position[1])
+                        
+                        # Only consider enemies within current range
+                        if dist < current_range and dist < next_dist:
+                            next_dist = dist
+                            next_target = enemy
                     
-                    # Draw the entire lightning path instantly (thicker for more dramatic ZAP)
-                    for i in range(len(lightning_path) - 1):
-                        x1, y1 = lightning_path[i]
-                        x2, y2 = lightning_path[i + 1]
+                    if next_target is None:
+                        break  # No more enemies to chain to within range
+                    
+                    chain_targets.append((next_target, bounce_index))  # Store target with its bounce index
+                    self.hit_enemies.add(id(next_target))
+                    next_pos = (next_target.get_position()[0] + ENEMY_SIZE // 2,
+                              next_target.get_position()[1] + ENEMY_SIZE // 2)
+                    current_position = next_pos
+                    
+                    # Reduce range for next chain (range falloff)
+                    current_range *= range_multiplier
+                
+                # Draw lightning chain and strike all targets
+                if chain_targets:
+                    # Draw lines connecting the chain
+                    current_ex, current_ey = closest_enemy.get_position()
+                    current_center = (current_ex + ENEMY_SIZE // 2, current_ey + ENEMY_SIZE // 2)
+                    
+                    for chain_target, bounce_index in chain_targets:
+                        tx, ty = chain_target.get_position()
+                        tx_center = (tx + ENEMY_SIZE // 2, ty + ENEMY_SIZE // 2)
+                        
+                        # Draw lightning line
                         line_id = self.game.canvas.create_line(
-                            x1, y1, x2, y2,
+                            current_center[0], current_center[1],
+                            tx_center[0], tx_center[1],
                             fill='cyan', width=3
                         )
                         
@@ -821,21 +783,24 @@ class Projectile:
                             except tk.TclError:
                                 pass
                         self.game.root.after(150, delete_line)
+                        
+                        current_center = tx_center
                     
-                    # Instantly strike all enemies in the path
-                    for target_enemy in lightning_targets:
-                        self._strike_lightning_target(target_enemy)
-                    
-                    # Create mini-forks to some targets if fork lightning is active
-                    if self.fork_lightning_level > 0 and len(nearby_enemies) >= 2:
-                        # Create mini-forks to 1-2 enemies (not the first one)
-                        fork_targets = nearby_enemies[1:3]
-                        for fork_target in fork_targets:
-                            self._create_mini_fork(fork_target)
-                    
-                    # After the big ZAP, immediately return to player (no more bouncing)
-                    self.returning = True
-                    return True
+                    # Strike all chain targets and handle forking on odd bounces
+                    for chain_target, bounce_index in chain_targets:
+                        # Check if this is an odd bounce (0-indexed, so 0, 2, 4... are odd in visual terms 1, 3, 5...)
+                        is_odd_bounce = (bounce_index % 2 == 0)  # First bounce is index 0 (visually "1st" = odd)
+                        
+                        # Strike the target
+                        self._strike_lightning_target(chain_target)
+                        
+                        # Create fork on odd bounces
+                        if is_odd_bounce:
+                            self._create_fork_from_target(chain_target)
+                
+                # After chain completes, return to player
+                self.returning = True
+                return True
             
             # Mini-fork chains end after one hit
             if self.is_mini_fork:
@@ -995,8 +960,56 @@ class Projectile:
         mini_fork_proj.hit_enemies.add(id(target_enemy))  # Mark the target as already hit
         mini_fork_proj.is_mini_fork = True  # Mark as mini-fork so it returns after one hit
         mini_fork_proj.chain_lightning_level = 0  # Mini-forks don't chain
-        mini_fork_proj.fork_lightning_level = 0  # Mini-forks can't fork
         self.game.projectiles.append(mini_fork_proj)
+    
+    def _create_fork_from_target(self, target_enemy):
+        """Create a forking lightning from a target enemy, attempting to chain to one nearby enemy."""
+        tx, ty = target_enemy.get_position()
+        tx_center = tx + ENEMY_SIZE // 2
+        ty_center = ty + ENEMY_SIZE // 2
+        
+        # Find the closest unhit enemy within fork range for this fork to target
+        fork_range = 150 + (60 * self.chain_lightning_level) * 0.8  # Reduced range for forks
+        fork_target = None
+        fork_target_dist = float('inf')
+        
+        for enemy in self.game.enemies:
+            if id(enemy) in self.hit_enemies:
+                continue
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE // 2
+            ey_center = ey + ENEMY_SIZE // 2
+            
+            dist = math.hypot(ex_center - tx_center, ey_center - ty_center)
+            
+            # Only consider enemies within fork range
+            if dist < fork_range and dist < fork_target_dist:
+                fork_target_dist = dist
+                fork_target = enemy
+        
+        # If we found a target, create a fork to it
+        if fork_target:
+            ftx, fty = fork_target.get_position()
+            ftx_center = ftx + ENEMY_SIZE // 2
+            fty_center = fty + ENEMY_SIZE // 2
+            
+            # Draw fork lightning line (white/bright color for forks)
+            fork_line_id = self.game.canvas.create_line(
+                tx_center, ty_center,
+                ftx_center, fty_center,
+                fill='white', width=2
+            )
+            
+            # Delete the fork line after a short delay
+            def delete_fork_line():
+                try:
+                    self.game.canvas.delete(fork_line_id)
+                except tk.TclError:
+                    pass
+            self.game.root.after(150, delete_fork_line)
+            
+            # Strike the fork target
+            self._strike_lightning_target(fork_target)
     
     def _create_split_projectiles(self):
         """Create two split projectiles branching off at angles."""
@@ -1109,7 +1122,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'fork_lightning']:
+                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -1613,7 +1626,6 @@ class Game:
             ('Add Shrapnel', 'upgrade_shrapnel', '#4a4a8a'),
             ('Add Speed Boost', 'upgrade_speed_boost', '#4a4a8a'),
             ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
-            ('Add Fork Lightning', 'upgrade_fork_lightning', '#4a4a8a'),
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
             ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
@@ -1660,8 +1672,6 @@ class Game:
                 self.add_upgrade('speed_boost')
             elif action == 'upgrade_chain_lightning':
                 self.add_upgrade('chain_lightning')
-            elif action == 'upgrade_fork_lightning':
-                self.add_upgrade('fork_lightning')
             elif action == 'level_up':
                 self.level += 1
                 self.xp_for_next_level = int(self.xp_for_next_level * 1.35)
