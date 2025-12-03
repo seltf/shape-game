@@ -5,7 +5,7 @@ a = Analysis(
     ['top_down_game.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('sounds', 'sounds')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

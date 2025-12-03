@@ -20,6 +20,7 @@ echo.
 echo Building executable...
 "%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "yoyo-game" ^
     --icon=NONE ^
+    --add-data "sounds;sounds" ^
     --distpath=dist ^
     --workpath=build ^
     --specpath=. ^

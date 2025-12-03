@@ -3,17 +3,180 @@ import random
 import math
 import winsound
 import threading
+import os
+import sys
+from pathlib import Path
 
-def play_beep_async(frequency, duration, game_instance=None):
-    """Play a beep asynchronously in a background thread."""
+# Determine the base directory for resources (handles both dev and bundled exe)
+if getattr(sys, 'frozen', False):
+    # Running as a bundled executable
+    BASE_DIR = sys._MEIPASS
+else:
+    # Running as a script
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Audio is available on Windows with winsound
+AUDIO_AVAILABLE = True
+
+# Sound effects dictionary - maps sound names to file paths
+SOUND_EFFECTS = {
+    'black_hole_detonate': os.path.join(BASE_DIR, 'sounds/black_hole_detonate.wav'),
+    'projectile_hit': os.path.join(BASE_DIR, 'sounds/projectile_hit.wav'),
+    'enemy_death': os.path.join(BASE_DIR, 'sounds/enemy_death.wav'),
+    'powerup': os.path.join(BASE_DIR, 'sounds/powerup.wav'),
+}
+
+# Background music file
+BACKGROUND_MUSIC = os.path.join(BASE_DIR, 'sounds/bit track space.wav')
+_music_thread = None
+_music_stop_event = None
+
+# Sound effect throttling to prevent overlapping/crunchy audio
+_last_sound_time = {}  # Track when each sound was last played
+_sound_cooldown_ms = 50  # Minimum milliseconds between same sound effects
+
+def play_sound_async(sound_name, frequency=None, duration=None, game_instance=None):
+    """
+    Play a sound asynchronously. Can use custom sound file or fallback to beep.
+    
+    Args:
+        sound_name: Name of the sound effect from SOUND_EFFECTS
+        frequency: Frequency for beep fallback (Hz)
+        duration: Duration for beep fallback (ms)
+        game_instance: Game instance to check if sound is enabled
+    """
+    import time
+    
     # Check if sound is enabled (default to True if no game instance)
     if game_instance is not None and not game_instance.sound_enabled:
         return
     
+    # Throttle sound effects to prevent overlapping/crunchy audio
+    current_time = time.time() * 1000  # Convert to milliseconds
+    if sound_name in _last_sound_time:
+        time_since_last = current_time - _last_sound_time[sound_name]
+        if time_since_last < _sound_cooldown_ms:
+            print(f"[SOUND] SKIPPED sound effect: {sound_name} (too soon, {time_since_last:.0f}ms since last)")
+            return  # Skip this sound, too soon after last one
+    
+    _last_sound_time[sound_name] = current_time
+    print(f"[SOUND] Playing sound effect: {sound_name} (freq={frequency}, dur={duration}ms)")
+    
+    def play():
+        # Try to load custom sound file using winsound
+        if sound_name in SOUND_EFFECTS and AUDIO_AVAILABLE:
+            sound_path = SOUND_EFFECTS[sound_name]
+            if os.path.exists(sound_path):
+                try:
+                    print(f"  -> Playing file: {sound_path}")
+                    winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    return  # Successfully played file, don't play fallback
+                except Exception as e:
+                    print(f"  -> Failed to play file {sound_path}: {e}")
+                    # Fall through to beep fallback
+        
+        # Fallback to beep if custom sound unavailable or couldn't be loaded
+        if frequency is not None and duration is not None:
+            try:
+                print(f"  -> Playing beep fallback: {frequency}Hz for {duration}ms")
+                winsound.Beep(frequency, duration)
+            except Exception as e:
+                print(f"  -> Failed to play beep: {e}")
+    
+    thread = threading.Thread(target=play, daemon=True)
+    thread.start()
+
+def play_beep_async(frequency, duration, game_instance=None):
+    """Play a beep asynchronously in a background thread."""
+    import time
+    
+    # Check if sound is enabled (default to True if no game instance)
+    if game_instance is not None and not game_instance.sound_enabled:
+        return
+    
+    # Throttle beeps by frequency to prevent overlapping
+    beep_key = f"beep_{frequency}"
+    current_time = time.time() * 1000
+    if beep_key in _last_sound_time:
+        time_since_last = current_time - _last_sound_time[beep_key]
+        if time_since_last < _sound_cooldown_ms:
+            print(f"[SOUND] SKIPPED beep: {frequency}Hz (too soon, {time_since_last:.0f}ms since last)")
+            return  # Skip this beep, too soon after last one
+    
+    _last_sound_time[beep_key] = current_time
+    print(f"[SOUND] Playing beep: {frequency}Hz for {duration}ms")
+    
     def beep():
-        winsound.Beep(frequency, duration)
+        try:
+            winsound.Beep(frequency, duration)
+        except Exception as e:
+            print(f"[SOUND] Failed to play beep: {e}")
     thread = threading.Thread(target=beep, daemon=True)
     thread.start()
+
+def start_background_music(game_instance=None):
+    """Start looping background music."""
+    global _music_thread, _music_stop_event
+    
+    # Check if sound and music are enabled
+    if game_instance is not None and (not game_instance.sound_enabled or not game_instance.music_enabled):
+        return
+    
+    # Stop any existing music
+    stop_background_music()
+    
+    if not AUDIO_AVAILABLE or not os.path.exists(BACKGROUND_MUSIC):
+        return
+    
+    # Create stop event for this music session
+    _music_stop_event = threading.Event()
+    
+    def loop_music():
+        try:
+            while not _music_stop_event.is_set():
+                # Use winsound to play with lower volume
+                winsound.PlaySound(BACKGROUND_MUSIC, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                
+                # Wait for the music to finish, checking stop event frequently
+                import time
+                # Estimate a reasonable wait time (adjust based on your music file length)
+                wait_time = 0
+                max_wait = 300  # Max 5 minutes per song to ensure full playback before loop
+                while wait_time < max_wait and not _music_stop_event.is_set():
+                    time.sleep(0.5)
+                    wait_time += 0.5
+                
+                if _music_stop_event.is_set():
+                    winsound.PlaySound(None, winsound.SND_PURGE)
+                    break
+        except Exception as e:
+            print(f"Failed to play background music: {e}")
+    
+    _music_thread = threading.Thread(target=loop_music, daemon=True)
+    _music_thread.start()
+
+def stop_background_music():
+    """Stop the looping background music."""
+    global _music_thread, _music_stop_event
+    
+    if _music_stop_event is not None:
+        _music_stop_event.set()
+    
+    # Stop winsound playback
+    try:
+        winsound.PlaySound(None, winsound.SND_PURGE)
+    except:
+        pass
+    
+    # Wait for thread to finish
+    if _music_thread is not None and _music_thread.is_alive():
+        _music_thread.join(timeout=1.0)
+    
+    _music_thread = None
+    _music_stop_event = None
+
+
+
 
 TESTING_MODE = False  # Set to True to spawn many enemies for testing weapons
 
@@ -26,25 +189,29 @@ MAX_ENEMY_COUNT = 150  # Maximum enemies allowed
 RESPAWN_BATCH_SIZE = 20  # Enemies to spawn per batch
 RESPAWN_INTERVAL = 10000  # Milliseconds between batches (10 seconds)
 RESPAWN_INTERVAL_MIN = 3000  # Minimum interval at high difficulty (3 seconds)
-RESPAWN_BATCH_SCALE = 5  # Milliseconds to reduce interval per minute played
+RESPAWN_BATCH_SCALE = 2  # Milliseconds to reduce interval per minute played
 MAX_BOUNCES = 100  # Maximum number of enemy bounces per projectile
 DASH_DISTANCE = 60  # How far the dash moves the player
 DASH_COOLDOWN = 500  # Milliseconds between dashes
-PARTICLE_COUNT = 8  # Particles in death poof effect
+PARTICLE_COUNT = 5  # Particles in death poof effect (reduced from 8 for performance)
 PARTICLE_LIFE = 15  # Frames until particle dies
 HOMING_STRENGTH = 0.15  # How strongly projectile homes in on target
 COLLISION_DISTANCE = 30  # Distance for projectile-enemy collision
+ENEMY_SIZE_HALF = 10  # Pre-calculated ENEMY_SIZE // 2 for performance
+COLLISION_DISTANCE_SQ = COLLISION_DISTANCE ** 2  # Pre-calculated squared distance for sqrt elimination
 PROJECTILE_SPLIT_ANGLE = 30  # Degrees to split projectiles on each bounce
 PROJECTILE_LIFETIME = 10000  # Milliseconds before projectile explodes
 EXPLOSION_RADIUS = 100  # Pixels for explosion damage radius
 
-WEAPON_STATS = {'projectile_speed': 16, 'homing': 0.30, 'bounces': 0, 'splits': True, 'shrapnel': 0}
+WEAPON_STATS = {'projectile_speed': 16, 'homing': 0, 'bounces': 0, 'splits': True, 'shrapnel': 0}
 
 # Weapon upgrades - modifiers that can be applied to base weapon
 WEAPON_UPGRADES = {
-    'extra_bounce': {'bounces': 1, 'name': 'Extra Bounce'},
+    'extra_bounce': {'bounces': 1, 'name': 'Ricochet'},
     'shrapnel': {'shrapnel': 1, 'name': 'Shrapnel'},
     'speed_boost': {'projectile_speed': 3, 'name': 'Speed Boost'},
+    'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
+    'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
 }
 
 # Linked upgrades - only appear if prerequisite(s) are owned
@@ -65,71 +232,62 @@ PLAYER_ACCELERATION = 3.5  # How quickly player accelerates
 PLAYER_MAX_SPEED = 22  # Maximum player speed
 PLAYER_FRICTION = 0.80  # Friction multiplier (0-1, lower = more friction)
 
-# Ability constants
-ABILITY_COOLDOWN = 5000  # Milliseconds between ability uses (5 seconds)
-BLACK_HOLE_SPEED = 3  # How fast the black hole orb travels
-BLACK_HOLE_LIFETIME = 3000  # Milliseconds before detonation (3 seconds)
-BLACK_HOLE_DETONATION_DURATION = 5000  # Milliseconds that black hole pulls enemies (5 seconds)
-BLACK_HOLE_RADIUS = 200  # Pull radius when detonating (increased from 120)
+# Black hole upgrade constants (now a weapon upgrade, not ability)
+BLACK_HOLE_TRIGGER_CHANCE = 0.15  # 15% chance per hit at level 1
+BLACK_HOLE_BASE_RADIUS = 40  # Base radius of black hole effect
 BLACK_HOLE_PULL_STRENGTH = 15  # Speed at which enemies get pulled in
-BLACK_HOLE_MIN_PULL_STRENGTH = 5  # Minimum pull strength at radius edge to prevent getting stuck
+BLACK_HOLE_PULL_DURATION = 3000  # Milliseconds that black hole pulls enemies (3 seconds)
+BLACK_HOLE_PULL_STRENGTH_MIN = 5  # Minimum pull strength at radius edge to prevent getting stuck
 
-class BlackHoleAbility:
+# Ability constants (no longer used for black hole, keeping for future abilities)
+ABILITY_COOLDOWN = 5000  # Milliseconds between ability uses (5 seconds)
+
+class BlackHole:
     """
-    Represents a black hole ability that pulls enemies in when it detonates.
+    Represents a black hole effect spawned by weapon hits.
+    Pulls and kills enemies in its radius when it detonates.
     """
-    def __init__(self, canvas, x, y, vx, vy, game):
-        """Initialize black hole at (x, y) with velocity (vx, vy)."""
+    def __init__(self, canvas, x, y, radius, game, level=1):
+        """Initialize black hole at (x, y) with given radius."""
         self.canvas = canvas
         self.game = game
         self.x = x
         self.y = y
-        self.vx = vx
-        self.vy = vy
+        self.radius = radius
+        self.level = level  # Store upgrade level for damage calculation
         self.time_alive = 0  # Track lifetime in milliseconds
-        self.detonated = False
-        # Visual representation - dark purple expanding circle
-        self.rect = self.canvas.create_oval(x-8, y-8, x+8, y+8, fill='#330033', outline='#6600ff', width=2)
+        self.detonation_phase = False
+        # Visual representation - only outline, no fill so enemies are visible
+        self.rect = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, 
+                                           fill='', outline='#6600ff', width=2)
         # Animated rings during pull phase
         self.active_rings = []  # Track canvas IDs of active animated rings
         self.ring_spawn_counter = 0  # Counter to spawn rings at intervals
     
     def update(self):
-        """Update black hole position and check for detonation."""
+        """Update black hole and check for detonation."""
         self.time_alive += 50  # Update is called every 50ms
         
-        # Move the black hole (before detonation)
-        if not self.detonated:
-            self.x += self.vx
-            self.y += self.vy
+        # Immediately start detonation (no travel phase for weapon version)
+        if not self.detonation_phase:
+            self.detonation_phase = True
+            self._start_detonation()
         
-        # Update position on canvas
-        self.canvas.coords(self.rect, self.x-8, self.y-8, self.x+8, self.y+8)
-        
-        # Check for detonation time
-        if self.time_alive >= BLACK_HOLE_LIFETIME and not self.detonated:
-            self.detonate()
-        
-        # Keep pulling enemies if detonated and within duration
-        if self.detonated:
+        # Keep pulling enemies if detonating and within duration
+        if self.detonation_phase:
             self._pull_enemies()
             self._update_rings()  # Update animated rings
             # Check if detonation duration expired
-            if self.time_alive >= BLACK_HOLE_LIFETIME + BLACK_HOLE_DETONATION_DURATION:
+            if self.time_alive >= BLACK_HOLE_PULL_DURATION:
                 self._cleanup_rings()  # Clean up any remaining rings
+                self._kill_enemies_at_center()  # Kill all enemies in center at end
                 return False  # Remove after pull duration ends
             return True
         
-        # Check for out of bounds (before detonation)
-        if self.x < 0 or self.x > WIDTH or self.y < 0 or self.y > HEIGHT:
-            return False
-        
         return True
     
-    def detonate(self):
-        """Detonate the black hole, initiating pulling of nearby enemies."""
-        self.detonated = True
-        
+    def _start_detonation(self):
+        """Start the detonation sequence with visual effects."""
         # Create explosion animation expanding from black hole
         for ring in range(3):
             ring_size = 20 + (ring * 30)
@@ -146,41 +304,42 @@ class BlackHoleAbility:
                     pass
             
             self.canvas.after(150 + (ring * 50), delete_ring)
-        
-        # Play detonation sound
-        play_beep_async(200, 200, self.game)
     
     def _pull_enemies(self):
-        """Pull all nearby enemies toward the black hole."""
+        """Pull all nearby enemies toward the black hole center."""
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
             
-            dist = math.hypot(ex_center - self.x, ey_center - self.y)
+            dx = self.x - ex_center
+            dy = self.y - ey_center
+            dist_sq = dx * dx + dy * dy
+            radius_sq = self.radius * self.radius
             
             # Only pull enemies within pull radius
-            if dist < BLACK_HOLE_RADIUS and dist > 0:
+            if dist_sq < radius_sq and dist_sq > 0:
+                dist = math.sqrt(dist_sq)
                 # Pull force decreases with distance but has a minimum to prevent getting stuck
-                pull_factor = 1.0 - (dist / BLACK_HOLE_RADIUS)  # 0 to 1
+                pull_factor = 1.0 - (dist / self.radius)  # 0 to 1
                 pull_factor = max(0.33, pull_factor)  # Minimum of 33% strength even at edge
                 pull_speed = BLACK_HOLE_PULL_STRENGTH * pull_factor
                 
                 # Direction toward black hole
-                dx = (self.x - ex_center) / dist
-                dy = (self.y - ey_center) / dist
+                dir_x = dx / dist
+                dir_y = dy / dist
                 
                 # Apply pull continuously during detonation
-                enemy.pull_velocity_x = dx * pull_speed
-                enemy.pull_velocity_y = dy * pull_speed
+                enemy.pull_velocity_x = dir_x * pull_speed
+                enemy.pull_velocity_y = dir_y * pull_speed
                 enemy.being_pulled = True
-                enemy.pull_timer = 1  # Reset pull timer to 1 frame, we'll refresh it each update
+                enemy.pull_timer = 1  # Reset pull timer to 1 frame
     
     def _update_rings(self):
         """Update animated rings, spawning new ones and shrinking existing ones."""
-        # Spawn a new ring every 250ms (5 updates at 50ms per update)
+        # Spawn a new ring every 400ms (8 updates at 50ms per update)
         self.ring_spawn_counter += 1
-        if self.ring_spawn_counter >= 5:
+        if self.ring_spawn_counter >= 8:
             self.ring_spawn_counter = 0
             self._spawn_new_ring()
         
@@ -189,8 +348,8 @@ class BlackHoleAbility:
         for ring_data in self.active_rings:
             ring_id, current_size, max_size = ring_data
             
-            # Shrink ring by 4 pixels per update (slower)
-            new_size = current_size - 4
+            # Shrink ring by 2 pixels per update (slower animation)
+            new_size = current_size - 2
             
             if new_size <= 0:
                 # Ring has shrunk to center, remove it
@@ -219,7 +378,7 @@ class BlackHoleAbility:
     
     def _spawn_new_ring(self):
         """Spawn a new animated ring at the edge of the pull radius."""
-        ring_size = BLACK_HOLE_RADIUS
+        ring_size = self.radius
         ring_id = self.canvas.create_oval(
             self.x - ring_size, self.y - ring_size,
             self.x + ring_size, self.y + ring_size,
@@ -237,6 +396,77 @@ class BlackHoleAbility:
             except tk.TclError:
                 pass
         self.active_rings.clear()
+    
+    def _kill_enemies_at_center(self):
+        """Deal damage to enemies in radius and fling them outward."""
+        # Play custom black hole detonation sound or fallback to THWOMP effect
+        print(f"[ACTION] Black hole detonating at center ({self.x}, {self.y})")
+        play_sound_async('black_hole_detonate', 80, 200, self.game)
+        
+        # Apply effects to all enemies in the radius
+        fling_speed = 12  # Speed to fling enemies outward
+        
+        for enemy in self.game.enemies[:]:
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
+            radius_sq = self.radius * self.radius
+            
+            # Apply effect if in radius
+            if dist_sq < radius_sq and dist_sq > 0:
+                dist = math.sqrt(dist_sq)
+                
+                # Deal damage based on level: 1 damage at levels 1-4, 2 damage at level 5+
+                damage = 2 if self.level >= 5 else 1
+                if hasattr(enemy, 'health'):
+                    enemy.health -= damage
+                else:
+                    # Basic enemies have 1 health, so damage kills them
+                    enemy.health = -1
+                
+                # Fling enemy outward from black hole
+                # Direction away from black hole
+                fling_dir_x = dx / dist
+                fling_dir_y = dy / dist
+                
+                # Apply fling using pull_velocity (which is already integrated into move_towards)
+                enemy.pull_velocity_x = fling_dir_x * fling_speed
+                enemy.pull_velocity_y = fling_dir_y * fling_speed
+                enemy.being_pulled = True
+                enemy.pull_timer = 20  # Fling for 20 frames (~1 second)
+        
+        # Clean up dead enemies
+        alive_enemies = []
+        for enemy in self.game.enemies:
+            if not hasattr(enemy, 'health') or enemy.health > 0:
+                alive_enemies.append(enemy)
+            else:
+                # Remove dead enemy from canvas
+                ex, ey = enemy.get_position()
+                self.game.create_death_poof(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
+                self.game.canvas.delete(enemy.rect)
+                
+                # Award XP based on enemy type
+                is_pentagon = isinstance(enemy, PentagonEnemy)
+                is_triangle = isinstance(enemy, TriangleEnemy)
+                
+                if is_pentagon:
+                    xp_reward = 7
+                elif is_triangle:
+                    xp_reward = 3
+                else:
+                    xp_reward = 1
+                self.game.add_xp(xp_reward)
+                self.game.score += 1
+        
+        self.game.enemies = alive_enemies
+        
+        # Update score display
+        self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
     
     def cleanup(self):
         """Remove black hole from canvas."""
@@ -258,6 +488,7 @@ class Player:
         self.y = y
         self.vx = 0  # Velocity x
         self.vy = 0  # Velocity y
+        self.health = 1  # Player starts with 1 HP
         self.rect = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
 
     def move(self, accel_x, accel_y):
@@ -397,7 +628,7 @@ class PentagonEnemy:
         self.size = size
         self.x = x
         self.y = y
-        self.health = 10  # Takes 10 hits to kill (tank)
+        self.health = 8  # Takes 8 hits to kill (tank)
         self.being_pulled = False  # Whether currently pulled by black hole
         self.pull_velocity_x = 0  # Pull force direction X
         self.pull_velocity_y = 0  # Pull force direction Y
@@ -515,11 +746,13 @@ class Shard:
         # Check for enemy collision
         for enemy in self.game.enemies[:]:  # Use slice to avoid modification during iteration
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
-            dist = math.hypot(ex_center - self.x, ey_center - self.y)
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
             
-            if dist < COLLISION_DISTANCE:
+            if dist_sq < COLLISION_DISTANCE_SQ:
                 # Hit enemy!
                 self.game.create_death_poof(ex_center, ey_center)
                 
@@ -551,7 +784,8 @@ class Shard:
                 else:
                     xp_reward = 1
                 self.game.add_xp(xp_reward)
-                play_beep_async(400, 30, self.game)                # If explosive shrapnel, create explosion effect with more shards
+                print(f"[ACTION] Enemy taking damage from black hole")
+                play_beep_async(250, 20, self.game)                # If explosive shrapnel, create explosion effect with more shards
                 if self.explosive:
                     self.game.create_explosive_shrapnel(ex_center, ey_center)
                 
@@ -591,6 +825,7 @@ class Projectile:
         self.homing_strength = stats.get('homing', 0.15)
         self.speed = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
         self.chain_lightning_level = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
+        self.black_hole_level = stats.get('black_hole', 0)  # Black hole upgrade level
         self.current_target = self._find_closest_target()  # Initial target for homing
         self.time_alive = 0  # Track lifetime in milliseconds
         self.returning = False  # Whether projectile is returning to player
@@ -600,6 +835,11 @@ class Projectile:
         """Update projectile position and check for collisions."""
         # Track lifetime
         self.time_alive += 50  # Update is called every 50ms
+        
+        # Check if 0.5 seconds have passed - trigger return
+        if not self.returning and self.time_alive >= 500:  # 500ms = 0.5 seconds
+            print(f"[ACTION] Projectile returning to player after 2 seconds")
+            self.returning = True
         
         # Return animation
         if self.returning:
@@ -625,8 +865,8 @@ class Projectile:
         # Apply homing if we have a target
         if self.current_target and self.current_target in self.game.enemies:
             tx, ty = self.current_target.get_position()
-            tx_center = tx + ENEMY_SIZE // 2
-            ty_center = ty + ENEMY_SIZE // 2
+            tx_center = tx + ENEMY_SIZE_HALF
+            ty_center = ty + ENEMY_SIZE_HALF
             dx = tx_center - self.x
             dy = ty_center - self.y
             dist = math.hypot(dx, dy)
@@ -644,27 +884,29 @@ class Projectile:
         self.y += self.vy
         self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
         
-        # Check for enemy collision
+        # Check for enemy collision - use squared distances to avoid sqrt
         closest_enemy = None
-        closest_dist = float('inf')
+        closest_dist_sq = COLLISION_DISTANCE_SQ
         
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
-            dist = math.hypot(ex_center - self.x, ey_center - self.y)
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy  # Squared distance (avoid sqrt)
             
-            if dist < COLLISION_DISTANCE and dist < closest_dist:
-                closest_dist = dist
+            if dist_sq < closest_dist_sq:
+                closest_dist_sq = dist_sq
                 closest_enemy = enemy
         
         if closest_enemy:
             # Hit enemy!
             ex, ey = closest_enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
             
             # Create poof effect
             self.game.create_death_poof(ex_center, ey_center)
@@ -685,7 +927,7 @@ class Projectile:
                     enemy_dies = True
             
             if enemy_dies:
-                # Create shrapnel if upgrade is active (only on final kill)
+                # Create shrapnel if upgrade is active (on every hit, not just final kill)
                 if self.shrapnel_level > 0:
                     self.game.create_shrapnel(ex_center, ey_center, self.vx, self.vy, self.shrapnel_level)
                 
@@ -705,13 +947,19 @@ class Projectile:
                 self.game.add_xp(xp_reward)
                 
                 # Play kill sound asynchronously
-                play_beep_async(400, 30, self.game)
+                print(f"[ACTION] Projectile killed enemy")
+                play_beep_async(250, 20, self.game)
             else:
-                # Enemy took damage but survived - just mark as hit for this bounce
-                pass
+                # Enemy took damage but survived - create shrapnel anyway if upgrade active
+                if self.shrapnel_level > 0:
+                    self.game.create_shrapnel(ex_center, ey_center, self.vx, self.vy, self.shrapnel_level)
             
             # Mark as hit
             self.hit_enemies.add(id(closest_enemy))
+            
+            # Black hole: Check if we should spawn a black hole on this hit
+            if self.black_hole_level > 0:
+                self._try_spawn_black_hole(ex_center, ey_center)
             
             # Chain lightning: On initial hit, trigger a chain through level number of targets
             if self.chain_lightning_level > 0 and not self.is_mini_fork:
@@ -725,26 +973,27 @@ class Projectile:
                 
                 # Build chain path from current enemy, finding closest unhit enemies within range
                 chain_targets = []
-                current_position = (closest_enemy.get_position()[0] + ENEMY_SIZE // 2,
-                                  closest_enemy.get_position()[1] + ENEMY_SIZE // 2)
+                current_position = (ex_center, ey_center)
                 
                 for bounce_index in range(num_chain_targets):
                     # Find closest unhit enemy to current position within current range
                     next_target = None
-                    next_dist = float('inf')
+                    next_dist_sq = current_range * current_range
                     
                     for enemy in self.game.enemies:
                         if id(enemy) in self.hit_enemies:
                             continue
                         ex, ey = enemy.get_position()
-                        ex_center = ex + ENEMY_SIZE // 2
-                        ey_center = ey + ENEMY_SIZE // 2
+                        ex_center_i = ex + ENEMY_SIZE_HALF
+                        ey_center_i = ey + ENEMY_SIZE_HALF
                         
-                        dist = math.hypot(ex_center - current_position[0], ey_center - current_position[1])
+                        dx = ex_center_i - current_position[0]
+                        dy = ey_center_i - current_position[1]
+                        dist_sq = dx * dx + dy * dy
                         
-                        # Only consider enemies within current range
-                        if dist < current_range and dist < next_dist:
-                            next_dist = dist
+                        # Only consider enemies within current range (use squared distance)
+                        if dist_sq < next_dist_sq:
+                            next_dist_sq = dist_sq
                             next_target = enemy
                     
                     if next_target is None:
@@ -752,8 +1001,8 @@ class Projectile:
                     
                     chain_targets.append((next_target, bounce_index))  # Store target with its bounce index
                     self.hit_enemies.add(id(next_target))
-                    next_pos = (next_target.get_position()[0] + ENEMY_SIZE // 2,
-                              next_target.get_position()[1] + ENEMY_SIZE // 2)
+                    next_pos = (next_target.get_position()[0] + ENEMY_SIZE_HALF,
+                              next_target.get_position()[1] + ENEMY_SIZE_HALF)
                     current_position = next_pos
                     
                     # Reduce range for next chain (range falloff)
@@ -763,11 +1012,11 @@ class Projectile:
                 if chain_targets:
                     # Draw lines connecting the chain
                     current_ex, current_ey = closest_enemy.get_position()
-                    current_center = (current_ex + ENEMY_SIZE // 2, current_ey + ENEMY_SIZE // 2)
+                    current_center = (current_ex + ENEMY_SIZE_HALF, current_ey + ENEMY_SIZE_HALF)
                     
                     for chain_target, bounce_index in chain_targets:
                         tx, ty = chain_target.get_position()
-                        tx_center = (tx + ENEMY_SIZE // 2, ty + ENEMY_SIZE // 2)
+                        tx_center = (tx + ENEMY_SIZE_HALF, ty + ENEMY_SIZE_HALF)
                         
                         # Draw lightning line
                         line_id = self.game.canvas.create_line(
@@ -809,6 +1058,8 @@ class Projectile:
             
             # Regular bouncing (only if we have bounces left)
             self.bounces += 1
+            # Extend return timer by 500ms for each ricochet
+            self.time_alive -= 500
             
             # If bounces exhausted, projectile returns
             if self.bounces > self.max_bounces:
@@ -819,8 +1070,8 @@ class Projectile:
             next_target = self._find_next_target()
             if next_target:
                 tx, ty = next_target.get_position()
-                tx_center = tx + ENEMY_SIZE // 2
-                ty_center = ty + ENEMY_SIZE // 2
+                tx_center = tx + ENEMY_SIZE_HALF
+                ty_center = ty + ENEMY_SIZE_HALF
                 dx = tx_center - self.x
                 dy = ty_center - self.y
                 dist = math.hypot(dx, dy)
@@ -842,30 +1093,34 @@ class Projectile:
     def _find_closest_target(self):
         """Find the closest unhit enemy for initial homing."""
         closest = None
-        closest_dist = float('inf')
+        closest_dist_sq = float('inf')
         for enemy in self.game.enemies:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
-            dist = math.hypot(ex_center - self.x, ey_center - self.y)
-            if dist < closest_dist:
-                closest_dist = dist
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
+            if dist_sq < closest_dist_sq:
+                closest_dist_sq = dist_sq
                 closest = enemy
         return closest
     
     def _find_next_target(self):
         """Find the closest unhit enemy for ricochet."""
         closest = None
-        closest_dist = float('inf')
+        closest_dist_sq = float('inf')
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
-            dist = math.hypot(ex_center - self.x, ey_center - self.y)
-            if dist < closest_dist:
-                closest_dist = dist
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
+            if dist_sq < closest_dist_sq:
+                closest_dist_sq = dist_sq
                 closest = enemy
         return closest
     
@@ -890,8 +1145,8 @@ class Projectile:
             return  # Enemy already dead
         
         tx, ty = target_enemy.get_position()
-        tx_center = tx + ENEMY_SIZE // 2
-        ty_center = ty + ENEMY_SIZE // 2
+        tx_center = tx + ENEMY_SIZE_HALF
+        ty_center = ty + ENEMY_SIZE_HALF
         
         # Create poof effect at the target
         self.game.create_death_poof(tx_center, ty_center)
@@ -931,7 +1186,8 @@ class Projectile:
             self.game.add_xp(xp_reward)
             
             # Play kill sound asynchronously
-            play_beep_async(400, 30, self.game)
+            print(f"[ACTION] Chain lightning killed enemy")
+            play_beep_async(250, 20, self.game)
     
     def _create_mini_fork(self, target_enemy):
         """Create a mini-fork lightning to a target enemy. Mini-forks only chain once."""
@@ -965,33 +1221,36 @@ class Projectile:
     def _create_fork_from_target(self, target_enemy):
         """Create a forking lightning from a target enemy, attempting to chain to one nearby enemy."""
         tx, ty = target_enemy.get_position()
-        tx_center = tx + ENEMY_SIZE // 2
-        ty_center = ty + ENEMY_SIZE // 2
+        tx_center = tx + ENEMY_SIZE_HALF
+        ty_center = ty + ENEMY_SIZE_HALF
         
         # Find the closest unhit enemy within fork range for this fork to target
         fork_range = 150 + (60 * self.chain_lightning_level) * 0.8  # Reduced range for forks
+        fork_range_sq = fork_range * fork_range
         fork_target = None
-        fork_target_dist = float('inf')
+        fork_target_dist_sq = fork_range_sq
         
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE // 2
-            ey_center = ey + ENEMY_SIZE // 2
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
             
-            dist = math.hypot(ex_center - tx_center, ey_center - ty_center)
+            dx = ex_center - tx_center
+            dy = ey_center - ty_center
+            dist_sq = dx * dx + dy * dy
             
             # Only consider enemies within fork range
-            if dist < fork_range and dist < fork_target_dist:
-                fork_target_dist = dist
+            if dist_sq < fork_target_dist_sq:
+                fork_target_dist_sq = dist_sq
                 fork_target = enemy
         
         # If we found a target, create a fork to it
         if fork_target:
             ftx, fty = fork_target.get_position()
-            ftx_center = ftx + ENEMY_SIZE // 2
-            fty_center = fty + ENEMY_SIZE // 2
+            ftx_center = ftx + ENEMY_SIZE_HALF
+            fty_center = fty + ENEMY_SIZE_HALF
             
             # Draw fork lightning line (white/bright color for forks)
             fork_line_id = self.game.canvas.create_line(
@@ -1010,6 +1269,26 @@ class Projectile:
             
             # Strike the fork target
             self._strike_lightning_target(fork_target)
+    
+    def _try_spawn_black_hole(self, x, y):
+        """Try to spawn a black hole at the given position based on black hole level."""
+        # Only allow one black hole at a time
+        if len(self.game.black_holes) > 0:
+            return  # Already have a black hole active
+        
+        # Calculate chance: 15% base at level 1, increases with level
+        trigger_chance = BLACK_HOLE_TRIGGER_CHANCE * self.black_hole_level
+        
+        # Check if we trigger the black hole
+        if random.random() > trigger_chance:
+            return  # Didn't trigger
+        
+        # Calculate radius based on level: 40 base + 20 per level
+        radius = BLACK_HOLE_BASE_RADIUS + (20 * self.black_hole_level)
+        
+        # Create the black hole
+        black_hole = BlackHole(self.game.canvas, x, y, radius, self.game, self.black_hole_level)
+        self.game.black_holes.append(black_hole)
     
     def _create_split_projectiles(self):
         """Create two split projectiles branching off at angles."""
@@ -1046,6 +1325,10 @@ class Game:
         self.root = root
         self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
+        
+        # Draw starfield background
+        self._draw_starfield()
+        
         self.score = 0
         self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
         self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
@@ -1071,6 +1354,7 @@ class Game:
         self.abilities = []  # List of active abilities being cast
         self.ability_cooldown_counter = 0  # Cooldown counter for abilities
         self.current_ability = 'black_hole'  # Current active ability
+        self.black_holes = []  # List of active black holes from weapon upgrades
         
         self.upgrade_menu_active = False  # Whether upgrade menu is displayed
         self.upgrade_menu_clickable = False  # Whether upgrade buttons can be clicked
@@ -1093,10 +1377,37 @@ class Game:
         self.ammo_orbs = []  # Track ammo orb canvas items
         self.ammo_rotation = 0  # Angle for orbiting ammo orbs
         self.sound_enabled = True  # Sound toggle setting
+        self.music_enabled = True  # Music toggle setting
         self.keyboard_layout = 'dvorak'  # 'dvorak' or 'qwerty'
+        self.game_over_active = False  # Whether game over screen is showing
+        self.game_over_restart_btn = None  # Reference to restart button
+        
+        # Start background music
+        start_background_music(self)
+        
         self.root.after(50, self.update)
         # Schedule first respawn
         self.root.after(RESPAWN_INTERVAL, self.on_respawn_timer)
+
+    def _draw_starfield(self):
+        """Draw a starfield background with randomly positioned stars."""
+        # Create a tag for starfield so we can keep it in background
+        num_stars = 150
+        for _ in range(num_stars):
+            x = random.randint(0, WIDTH)
+            y = random.randint(0, HEIGHT)
+            size = random.randint(1, 3)  # Small stars
+            brightness = random.randint(100, 255)
+            color = f'#{brightness:02x}{brightness:02x}{brightness:02x}'  # White-ish
+            
+            # Create small circles for stars
+            star = self.canvas.create_oval(
+                x - size//2, y - size//2,
+                x + size//2, y + size//2,
+                fill=color, outline=color
+            )
+            # Send to back so it doesn't interfere with game elements
+            self.canvas.tag_lower(star)
 
     def compute_weapon_stats(self):
         """Compute effective weapon stats based on base stats and active upgrades."""
@@ -1122,7 +1433,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning']:
+                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -1138,7 +1449,7 @@ class Game:
         if self.xp >= self.xp_for_next_level:
             self.xp -= self.xp_for_next_level
             self.level += 1
-            self.xp_for_next_level = int(self.xp_for_next_level * 1.35)  # Scale XP requirement
+            self.xp_for_next_level = int(self.xp_for_next_level * 1.2)  # Scale XP requirement
             self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
             self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
             # Show upgrade menu on level up
@@ -1162,15 +1473,36 @@ class Game:
         return False
 
     def spawn_enemies(self):
-        """Create a new set of enemies at random positions, scaled by level."""
+        """Create a new set of enemies at random positions outside the screen, scaled by level."""
         self.enemies.clear()
         initial_count = TESTING_MODE_ENEMY_COUNT if TESTING_MODE else INITIAL_ENEMY_COUNT
         # Scale initial enemy count with level
         level_scaled_count = int(initial_count * (1 + 0.15 * self.level))  # 15% increase per level
         
         for _ in range(level_scaled_count):
-            x = random.randint(0, WIDTH-ENEMY_SIZE)
-            y = random.randint(0, HEIGHT-ENEMY_SIZE)
+            # Spawn enemies outside the screen bounds
+            margin = 200  # Spawn distance from edge
+            
+            # Choose a side (top, bottom, left, right) and spawn on that edge only
+            side = random.choice(['top', 'bottom', 'left', 'right'])
+            
+            if side == 'top':
+                # Top edge: x spans full width, y is above screen
+                x = random.randint(-ENEMY_SIZE, WIDTH)
+                y = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
+            elif side == 'bottom':
+                # Bottom edge: x spans full width, y is below screen
+                x = random.randint(-ENEMY_SIZE, WIDTH)
+                y = random.randint(HEIGHT, HEIGHT + margin)
+            elif side == 'left':
+                # Left edge: x is left of screen, y spans full height
+                x = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
+                y = random.randint(-ENEMY_SIZE, HEIGHT)
+            else:  # right
+                # Right edge: x is right of screen, y spans full height
+                x = random.randint(WIDTH, WIDTH + margin)
+                y = random.randint(-ENEMY_SIZE, HEIGHT)
+            
             self._spawn_enemy_by_level(x, y)
     
     def _spawn_enemy_by_level(self, x, y):
@@ -1207,11 +1539,11 @@ class Game:
         """Spawn 'count' new enemies at random positions with level-based scaling."""
         # Increase max enemies based on level (not just time played)
         base_max = MAX_ENEMY_COUNT
-        level_scaling = 1 + (0.1 * self.level)  # 10% increase per level
+        level_scaling = 1 + (0.05 * self.level)  # 5% increase per level (reduced from 10%)
         max_enemies = int(base_max * level_scaling)
         
         # Also increase respawn count with level
-        scaled_count = int(count * (1 + 0.05 * self.level))  # 5% increase per level
+        scaled_count = int(count * (1 + 0.025 * self.level))  # 2.5% increase per level (reduced from 5%)
         
         if len(self.enemies) >= max_enemies:
             return
@@ -1219,8 +1551,24 @@ class Game:
         for _ in range(scaled_count):
             if len(self.enemies) >= max_enemies:
                 break
-            x = random.randint(0, WIDTH-ENEMY_SIZE)
-            y = random.randint(0, HEIGHT-ENEMY_SIZE)
+            
+            # Spawn enemies outside the screen bounds (same as initial spawn)
+            margin = 200
+            side = random.choice(['top', 'bottom', 'left', 'right'])
+            
+            if side == 'top':
+                x = random.randint(-ENEMY_SIZE, WIDTH)
+                y = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
+            elif side == 'bottom':
+                x = random.randint(-ENEMY_SIZE, WIDTH)
+                y = random.randint(HEIGHT, HEIGHT + margin)
+            elif side == 'left':
+                x = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
+                y = random.randint(-ENEMY_SIZE, HEIGHT)
+            else:  # right
+                x = random.randint(WIDTH, WIDTH + margin)
+                y = random.randint(-ENEMY_SIZE, HEIGHT)
+            
             self._spawn_enemy_by_level(x, y)
 
     def on_respawn_timer(self):
@@ -1243,6 +1591,19 @@ class Game:
 
     def on_canvas_click(self, event):
         """Handle canvas clicks - routes to upgrade menu or pause menu or dev menu or attack."""
+        print(f"[INPUT] Canvas clicked at ({event.x}, {event.y})")
+        
+        # If game over screen is showing, handle restart button click
+        if self.game_over_active:
+            if self.game_over_restart_btn is not None:
+                coords = self.canvas.coords(self.game_over_restart_btn)
+                if coords and len(coords) >= 4:
+                    x1, y1, x2, y2 = coords
+                    if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                        self.restart_game()
+                        return
+            return  # Click outside button does nothing
+        
         # If dev menu is open, handle dev button clicks
         if self.dev_menu_active:
             for action, btn_id in self.dev_buttons.items():
@@ -1280,6 +1641,8 @@ class Game:
                             self.quit_game()
                         elif action == 'sound':
                             self.toggle_sound()
+                        elif action == 'music':
+                            self.toggle_music()
                         elif action == 'keyboard':
                             self.toggle_keyboard_layout()
                         elif action == 'dev':
@@ -1298,6 +1661,12 @@ class Game:
             
             # Pick three random upgrades
             available_upgrades = list(WEAPON_UPGRADES.keys())
+            
+            # Remove one-time upgrades that have already been picked
+            available_upgrades = [
+                u for u in available_upgrades 
+                if not (WEAPON_UPGRADES[u].get('one_time', False) and u in self.active_upgrades)
+            ]
             
             # Add linked upgrades if prerequisites are met
             for linked_key, linked_data in LINKED_UPGRADES.items():
@@ -1542,8 +1911,25 @@ class Game:
         self.pause_menu_elements.append(self.pause_buttons['sound'])
         self.pause_menu_elements.append(sound_text)
         
+        # Music toggle button
+        music_btn_y = sound_btn_y + 60
+        music_status = 'ON' if self.music_enabled else 'OFF'
+        self.pause_buttons['music'] = self.canvas.create_rectangle(
+            overlay_x + 40, music_btn_y,
+            overlay_x + overlay_width - 40, music_btn_y + 40,
+            fill='#7a4a4a', outline='white', width=2
+        )
+        music_text = self.canvas.create_text(
+            WIDTH // 2, music_btn_y + 20,
+            text=f'Music: {music_status}',
+            fill='white',
+            font=('Arial', 16)
+        )
+        self.pause_menu_elements.append(self.pause_buttons['music'])
+        self.pause_menu_elements.append(music_text)
+        
         # Keyboard layout toggle button
-        keyboard_btn_y = sound_btn_y + 60
+        keyboard_btn_y = music_btn_y + 60
         keyboard_layout_display = self.keyboard_layout.upper()
         self.pause_buttons['keyboard'] = self.canvas.create_rectangle(
             overlay_x + 40, keyboard_btn_y,
@@ -1576,12 +1962,24 @@ class Game:
 
     def quit_game(self):
         """Close the game window and exit."""
+        stop_background_music()
         self.root.destroy()
     
     def toggle_sound(self):
         """Toggle sound on/off and refresh pause menu to show new state."""
         self.sound_enabled = not self.sound_enabled
         # Close and reopen pause menu to update the sound button text
+        self.hide_pause_menu()
+        self.show_pause_menu()
+    
+    def toggle_music(self):
+        """Toggle music on/off and refresh pause menu to show new state."""
+        self.music_enabled = not self.music_enabled
+        if not self.music_enabled:
+            stop_background_music()
+        else:
+            start_background_music(self)
+        # Close and reopen pause menu to update the music button text
         self.hide_pause_menu()
         self.show_pause_menu()
     
@@ -1622,10 +2020,12 @@ class Game:
         
         # Button definitions: (label, action, color)
         buttons = [
-            ('Add Extra Bounce', 'upgrade_extra_bounce', '#4a4a8a'),
+            ('Add Ricochet', 'upgrade_extra_bounce', '#4a4a8a'),
             ('Add Shrapnel', 'upgrade_shrapnel', '#4a4a8a'),
             ('Add Speed Boost', 'upgrade_speed_boost', '#4a4a8a'),
             ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
+            ('Add Black Hole', 'upgrade_black_hole', '#4a4a8a'),
+            ('Add Homing', 'upgrade_homing', '#4a4a8a'),
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
             ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
@@ -1672,6 +2072,10 @@ class Game:
                 self.add_upgrade('speed_boost')
             elif action == 'upgrade_chain_lightning':
                 self.add_upgrade('chain_lightning')
+            elif action == 'upgrade_black_hole':
+                self.add_upgrade('black_hole')
+            elif action == 'upgrade_homing':
+                self.add_upgrade('homing')
             elif action == 'level_up':
                 self.level += 1
                 self.xp_for_next_level = int(self.xp_for_next_level * 1.35)
@@ -1684,8 +2088,17 @@ class Game:
                 self.close_dev_menu()
                 return
             
-            # Close dev menu and return to pause menu after action
-            self.close_dev_menu()
+            # Keep dev menu open for multiple selections
+            # Delete only dev menu elements and redraw the menu (don't delete game elements)
+            for element_id in self.dev_menu_elements:
+                try:
+                    self.canvas.delete(element_id)
+                except tk.TclError:
+                    pass
+            
+            self.dev_menu_elements = []
+            self.dev_buttons = {}
+            self.show_dev_menu()
         except Exception as e:
             print(f"Error in dev action '{action}': {e}")
 
@@ -1711,6 +2124,9 @@ class Game:
         self.paused = False
         self.pause_menu_id = None
         self.pause_buttons = {}
+        
+        # Clear any stuck keys from being pressed while pause menu was open
+        self.pressed_keys.clear()
         
         # Delete all pause menu elements
         if hasattr(self, 'pause_menu_elements'):
@@ -1739,8 +2155,10 @@ class Game:
 
     def restart_game(self):
         """Restart the game, resetting player, enemies, and score."""
+        stop_background_music()
         if self.paused:
             self.hide_pause_menu()
+        self.game_over_active = False  # Clear game over flag
         self.canvas.delete('all')
         self.score = 0
         self.game_time_ms = 0
@@ -1775,7 +2193,14 @@ class Game:
         if event.char in movement_keys:
             self.pressed_keys.add(event.char)
         elif event.keysym == 'Escape':
-            if not hasattr(self, 'paused') or not self.paused:
+            # If dev menu is open, close it
+            if self.dev_menu_active:
+                self.close_dev_menu()
+            # If pause menu is open, close it (resume game)
+            elif self.paused:
+                self.hide_pause_menu()
+            # Otherwise, open pause menu
+            else:
                 self.show_pause_menu()
 
     def on_key_release(self, event):
@@ -1801,31 +2226,10 @@ class Game:
         self.ability_cooldown_counter = ABILITY_COOLDOWN
     
     def cast_black_hole(self):
-        """Cast black hole ability toward mouse cursor."""
-        px, py = self.player.get_center()
-        
-        # Get direction to mouse
-        mouse_x = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
-        mouse_y = self.canvas.winfo_pointery() - self.canvas.winfo_rooty()
-        dx = mouse_x - px
-        dy = mouse_y - py
-        dist = math.hypot(dx, dy)
-        
-        if dist == 0:
-            # No direction, use forward direction
-            dx, dy = self.last_move_dx, self.last_move_dy
-            dist = 1
-        
-        # Normalize and apply speed
-        vx = (dx / dist) * BLACK_HOLE_SPEED
-        vy = (dy / dist) * BLACK_HOLE_SPEED
-        
-        # Create black hole
-        black_hole = BlackHoleAbility(self.canvas, px, py, vx, vy, self)
-        self.abilities.append(black_hole)
-        
-        # Play ability sound
-        play_beep_async(150, 100, self)
+        """Black hole is now a weapon upgrade, not an ability. This method is deprecated."""
+        # Black hole effects are now spawned through weapon hits with the black hole upgrade
+        # This ability method is kept for future alternative ability implementations
+        pass
 
     def update(self):
         """Main game loop: update movement, enemies, and schedule next frame."""
@@ -1838,10 +2242,12 @@ class Game:
         
         self.handle_player_movement()
         self.move_enemies()
+        self.check_player_collision()  # Check if enemies hit player
         self.update_particles()
         self.update_shards()
         self.update_projectiles()
         self.update_abilities()
+        self.update_black_holes()
         self.update_ammo_orbs()
         self.update_dash_cooldown()
         self.update_ability_cooldown()
@@ -1978,6 +2384,16 @@ class Game:
                 ability.cleanup()
         self.abilities = alive_abilities
 
+    def update_black_holes(self):
+        """Update all active black holes from weapon upgrades and remove expired ones."""
+        alive_black_holes = []
+        for black_hole in self.black_holes:
+            if black_hole.update():
+                alive_black_holes.append(black_hole)
+            else:
+                black_hole.cleanup()
+        self.black_holes = alive_black_holes
+
     def update_dash_cooldown(self):
         """Update dash cooldown timer."""
         if self.dash_cooldown_counter > 0:
@@ -2054,7 +2470,87 @@ class Game:
         """Move all enemies towards the player."""
         px, py = self.player.get_center()
         for enemy in self.enemies:
-            enemy.move_towards(px, py)
+            # Different speeds for different enemy types
+            if isinstance(enemy, PentagonEnemy):
+                enemy.move_towards(px, py, speed=3)  # Pentagons move slower
+            elif isinstance(enemy, TriangleEnemy):
+                enemy.move_towards(px, py, speed=4)  # Triangles medium speed
+            else:  # CircleEnemy
+                enemy.move_towards(px, py, speed=5)  # Circles normal speed
+
+    def check_player_collision(self):
+        """Check if any enemy collides with player and deal damage."""
+        px, py = self.player.get_center()
+        for enemy in self.enemies:
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            
+            # Check distance between player and enemy
+            dx = ex_center - px
+            dy = ey_center - py
+            dist_sq = dx * dx + dy * dy
+            collision_dist_sq = (PLAYER_SIZE // 2 + ENEMY_SIZE // 2) ** 2
+            
+            if dist_sq < collision_dist_sq:
+                # Collision detected - deal damage to player
+                print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")
+                self.player.health -= 1
+                if self.player.health <= 0:
+                    print(f"[ACTION] Player died!")
+                    self.game_over()
+                return  # Only take damage once per frame
+
+    def game_over(self):
+        """Handle game over - show game over screen."""
+        self.paused = True
+        self.game_over_active = True  # Flag to indicate game over screen is active
+        # Create game over overlay
+        overlay_width = WIDTH // 2
+        overlay_height = HEIGHT // 4
+        overlay_x = (WIDTH - overlay_width) // 2
+        overlay_y = (HEIGHT - overlay_height) // 2
+        
+        # Background
+        self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + overlay_width, overlay_y + overlay_height,
+            fill='#1a1a1a', outline='red', width=3
+        )
+        
+        # Game Over text
+        self.canvas.create_text(
+            WIDTH // 2, overlay_y + 30,
+            text='GAME OVER',
+            fill='red',
+            font=('Arial', 48, 'bold')
+        )
+        
+        # Score text
+        self.canvas.create_text(
+            WIDTH // 2, overlay_y + 90,
+            text=f'Final Score: {self.score}',
+            fill='yellow',
+            font=('Arial', 24)
+        )
+        
+        # Restart button
+        btn_width = 200
+        btn_height = 50
+        btn_x = (WIDTH - btn_width) // 2
+        btn_y = overlay_y + 140
+        
+        self.game_over_restart_btn = self.canvas.create_rectangle(
+            btn_x, btn_y,
+            btn_x + btn_width, btn_y + btn_height,
+            fill='green', outline='white', width=2
+        )
+        self.canvas.create_text(
+            WIDTH // 2, btn_y + 25,
+            text='Restart',
+            fill='white',
+            font=('Arial', 20, 'bold')
+        )
 
     def attack(self):
         """Launch a projectile if none are active."""
@@ -2068,6 +2564,7 @@ class Game:
             return
         
         # Play attack sound asynchronously
+        print(f"[ACTION] Player attacking - firing projectile")
         play_beep_async(500, 50, self)
         
         center_x, center_y = self.player.get_center()
@@ -2079,7 +2576,7 @@ class Game:
         vx = math.cos(angle) * projectile_speed
         vy = math.sin(angle) * projectile_speed
         projectile = Projectile(self.canvas, center_x, center_y, vx, vy, self)
-        # Set projectile homing strength
+        # Set homing from weapon stats (0 by default, 0.15 if Homing upgrade owned)
         projectile.homing_strength = self.computed_weapon_stats['homing']
         self.projectiles.append(projectile)
 
