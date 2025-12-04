@@ -155,16 +155,11 @@ class AudioManager:
         if self._music_stop_event is not None:
             self._music_stop_event.set()
         
-        # Stop winsound playback
-        try:
-            winsound.PlaySound(None, winsound.SND_PURGE)
-        except Exception:
-            pass
+        # Don't call winsound.PlaySound(None, SND_PURGE) - it can hang on Windows
+        # The music thread will stop when _music_stop_event is set
         
-        # Wait for thread to finish
-        if self._music_thread is not None and self._music_thread.is_alive():
-            self._music_thread.join(timeout=1.0)
-        
+        # Don't wait for thread to finish - let it stop asynchronously
+        # This prevents blocking the main game thread
         self._music_thread = None
         self._music_stop_event = None
     
