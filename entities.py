@@ -973,8 +973,10 @@ class Projectile:
                 self.returning = True  # Start returning if no more targets
                 return True
         
-        # Out of bounds
-        if self.x < 0 or self.x > WIDTH or self.y < 0 or self.y > HEIGHT:
+        # Out of bounds - use canvas dimensions, not global WIDTH/HEIGHT
+        canvas_width = self.canvas.winfo_width()
+        canvas_height = self.canvas.winfo_height()
+        if self.x < 0 or self.x > canvas_width or self.y < 0 or self.y > canvas_height:
             return False
         
         return True

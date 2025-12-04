@@ -23,19 +23,19 @@ class Game:
         """Initialize the game window, player, enemies, and event bindings."""
         self.root: tk.Tk = root
         
-        # Get the actual window dimensions
-        root.update()  # Update window to get accurate dimensions
-        self.window_width: int = root.winfo_width()
-        self.window_height: int = root.winfo_height()
-        
-        # If window dimensions are not set yet, use screen dimensions
-        if self.window_width <= 1:
-            self.window_width = root.winfo_screenwidth()
-        if self.window_height <= 1:
-            self.window_height = root.winfo_screenheight()
-        
-        self.canvas: tk.Canvas = tk.Canvas(root, width=self.window_width, height=self.window_height, bg='black')
+        self.canvas: tk.Canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
+        
+        # Get the actual canvas dimensions (after packing)
+        root.update()
+        self.window_width: int = self.canvas.winfo_width()
+        self.window_height: int = self.canvas.winfo_height()
+        
+        # If canvas dimensions are not set yet, use root window dimensions
+        if self.window_width <= 1:
+            self.window_width = root.winfo_width()
+        if self.window_height <= 1:
+            self.window_height = root.winfo_height()
         
         # Draw starfield background
         self._draw_starfield()
