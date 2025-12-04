@@ -944,17 +944,15 @@ class Projectile:
                         # Create fork on odd bounces
                         if is_odd_bounce:
                             self._create_fork_from_target(chain_target)
-                
-                # After chain completes, return to player
-                self.returning = True
-                return True
             
-            # Mini-fork chains end after one hit
+            # Regular bouncing (only if we have bounces left) - happens after chain lightning
+            # Chain lightning doesn't prevent normal bouncing
+            
+            # Mini-fork chains end after one hit (don't continue bouncing)
             if self.is_mini_fork:
                 self.returning = True
                 return True
             
-            # Regular bouncing (only if we have bounces left)
             self.bounces += 1
             # Extend return timer by 500ms for each ricochet
             self.time_alive -= 500
