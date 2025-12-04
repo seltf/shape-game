@@ -22,15 +22,27 @@ class Game:
     def __init__(self, root: tk.Tk) -> None:
         """Initialize the game window, player, enemies, and event bindings."""
         self.root: tk.Tk = root
-        self.canvas: tk.Canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
+        
+        # Get the actual window dimensions
+        root.update()  # Update window to get accurate dimensions
+        self.window_width: int = root.winfo_width()
+        self.window_height: int = root.winfo_height()
+        
+        # If window dimensions are not set yet, use screen dimensions
+        if self.window_width <= 1:
+            self.window_width = root.winfo_screenwidth()
+        if self.window_height <= 1:
+            self.window_height = root.winfo_screenheight()
+        
+        self.canvas: tk.Canvas = tk.Canvas(root, width=self.window_width, height=self.window_height, bg='black')
         self.canvas.pack()
         
         # Draw starfield background
         self._draw_starfield()
         
         self.score = 0
-        self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
-        self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
+        self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
+        self.player = Player(self.canvas, self.window_width//2, self.window_height//2, PLAYER_SIZE)
         self.player.game = self  # Give player reference to game instance for shield pushback
         
         self.enemies = []
@@ -52,8 +64,8 @@ class Game:
         self.xp = 0  # Current XP
         self.level = 0  # Current level
         self.xp_for_next_level = 10  # XP needed for next level
-        self.level_text = self.canvas.create_text(WIDTH//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
-        self.xp_text = self.canvas.create_text(WIDTH//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
+        self.level_text = self.canvas.create_text(self.window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
+        self.xp_text = self.canvas.create_text(self.window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
 
         # Ability system
 
@@ -90,8 +102,8 @@ class Game:
         # Create a tag for starfield so we can keep it in background
         num_stars = 150
         for _ in range(num_stars):
-            x = random.randint(0, WIDTH)
-            y = random.randint(0, HEIGHT)
+            x = random.randint(0, self.window_width)
+            y = random.randint(0, self.window_height)
             size = random.randint(1, 3)  # Small stars
             brightness = random.randint(100, 255)
             color = f'#{brightness:02x}{brightness:02x}{brightness:02x}'  # White-ish
@@ -190,20 +202,20 @@ class Game:
             
             if side == 'top':
                 # Top edge: x spans full width, y is above screen
-                x = random.randint(-ENEMY_SIZE, WIDTH)
+                x = random.randint(-ENEMY_SIZE, self.window_width)
                 y = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
             elif side == 'bottom':
                 # Bottom edge: x spans full width, y is below screen
-                x = random.randint(-ENEMY_SIZE, WIDTH)
-                y = random.randint(HEIGHT, HEIGHT + margin)
+                x = random.randint(-ENEMY_SIZE, self.window_width)
+                y = random.randint(self.window_height, self.window_height + margin)
             elif side == 'left':
                 # Left edge: x is left of screen, y spans full height
                 x = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
-                y = random.randint(-ENEMY_SIZE, HEIGHT)
+                y = random.randint(-ENEMY_SIZE, self.window_height)
             else:  # right
                 # Right edge: x is right of screen, y spans full height
-                x = random.randint(WIDTH, WIDTH + margin)
-                y = random.randint(-ENEMY_SIZE, HEIGHT)
+                x = random.randint(self.window_width, self.window_width + margin)
+                y = random.randint(-ENEMY_SIZE, self.window_height)
             
             self._spawn_enemy_by_level(x, y)
     
@@ -546,7 +558,7 @@ class Game:
 
     def move_player(self, dx, dy):
         """Move the player by (dx, dy)."""
-        self.player.move(dx, dy, 0)
+        self.player.move(dx, dy, 0, self.window_width, self.window_height)
 
     def create_death_poof(self, x, y):
         """Create a poof particle effect at (x, y)."""

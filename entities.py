@@ -265,8 +265,14 @@ class Player:
         self.shield_level: int = 0  # Current shield level (0-3)
         self.rect: int = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
 
-    def move(self, accel_x: float, accel_y: float, speed_boost: float = 0) -> None:
+    def move(self, accel_x: float, accel_y: float, speed_boost: float = 0, window_width: Optional[int] = None, window_height: Optional[int] = None) -> None:
         """Apply acceleration to player velocity and update position."""
+        # Use provided window dimensions, fall back to constants if not provided
+        if window_width is None:
+            window_width = WIDTH
+        if window_height is None:
+            window_height = HEIGHT
+        
         # Apply acceleration
         self.vx += accel_x * PLAYER_ACCELERATION
         self.vy += accel_y * PLAYER_ACCELERATION
@@ -283,8 +289,8 @@ class Player:
         self.vy *= PLAYER_FRICTION
         
         # Update position
-        self.x = max(self.size//2, min(WIDTH-self.size//2, self.x+self.vx))
-        self.y = max(self.size//2, min(HEIGHT-self.size//2, self.y+self.vy))
+        self.x = max(self.size//2, min(window_width-self.size//2, self.x+self.vx))
+        self.y = max(self.size//2, min(window_height-self.size//2, self.y+self.vy))
         self.canvas.coords(self.rect, self.x-self.size//2, self.y-self.size//2, self.x+self.size//2, self.y+self.size//2)
         
         # Update shield ring position if active
