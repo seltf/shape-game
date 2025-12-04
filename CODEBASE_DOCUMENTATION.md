@@ -224,10 +224,34 @@ update() called
 ```
 
 ### Event Handlers
-- `on_key_press()`: Store pressed key in `self.pressed_keys` set
+- `on_key_press()`: Store pressed key in `self.pressed_keys` set; handle special keys (E for auto-fire toggle, Escape for menu)
 - `on_key_release()`: Remove released key from set
 - `on_canvas_click()`: Route to menu or call `attack()`
 - `on_mouse_move()`: Track mouse position for attack direction
+
+### Player Controls
+
+**Movement Controls (Layout-Independent)**
+- **W / Comma (Dvorak) / Up Arrow**: Move up
+- **A**: Move left
+- **S / O (Dvorak) / Down Arrow**: Move down
+- **D / E (Dvorak) / Right Arrow**: Move right
+
+**Combat Controls**
+- **Mouse Click / Left Button**: Fire projectile toward mouse cursor
+- **E Key (QWERTY) / Physical position-based**: Toggle auto-fire on/off
+
+**System Controls**
+- **Escape**: Open/close pause menu
+
+**Auto-Fire Feature**
+- Pressing E toggles auto-fire mode on/off
+- When enabled, projectiles fire automatically every 500ms
+- Auto-fire respects normal firing rules:
+  - Cannot fire while paused or upgrade menu is open
+  - Cannot fire while a main projectile is already active
+  - Respects the 500ms attack cooldown between shots
+- Console displays "Auto-fire ENABLED" or "Auto-fire DISABLED" when toggled
 
 ---
 
@@ -327,6 +351,16 @@ self.vy += (target_vy - self.vy) * homing_strength
    - Chain Lightning (requires base damage level 5)
    - Mini-Forks (requires chain lightning)
    - Explosive Shrapnel (requires shrapnel)
+
+### Core Gameplay Features
+
+**Auto-Fire Mode**
+- Press E key to toggle on/off (position-based, works on QWERTY/Dvorak)
+- When enabled, automatically fires projectiles every 500ms
+- Respects all normal firing rules (can't fire during pause, with active projectile, or in menus)
+- State is tracked in `self.auto_fire_enabled` boolean
+- Attack cooldown managed by `self.attack_cooldown` counter in milliseconds
+- Useful for extended play sessions or handling many enemies
 
 ### Adding New Upgrades
 
@@ -727,6 +761,33 @@ dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
 4. Calculate positions dynamically (not hardcoded)
 5. Add 300ms delay for buttons to prevent accidental clicks
 6. Handle clicks in menu's click handler
+
+#### Adding New Control Features
+
+1. Add state variable in `Game.__init__()`:
+   ```python
+   self.feature_enabled = False  # Toggle state
+   ```
+
+2. Add key handling in `on_key_press()`:
+   ```python
+   elif event.keysym == 'keysym_name':  # Check keysym, not event.char
+       self.feature_enabled = not self.feature_enabled
+       print(f"Feature {'ENABLED' if self.feature_enabled else 'DISABLED'}")
+   ```
+
+3. Implement feature logic in `update()` loop:
+   ```python
+   if self.feature_enabled and <precondition>:
+       self.do_feature()
+   ```
+
+4. Example: Auto-fire feature uses:
+   - `self.auto_fire_enabled`: Toggle state (bool)
+   - `self.attack_cooldown`: Fire rate limiter (int, milliseconds)
+   - `if self.attack_cooldown <= 0`: Check if ready to fire
+   - `self.attack_cooldown = PROJECTILE_RETURN_TIME_MS`: Reset cooldown
+   - `self.attack()`: Execute action
 
 ### Performance Considerations
 
