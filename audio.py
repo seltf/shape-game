@@ -8,20 +8,21 @@ import threading
 import os
 import sys
 import time
+from typing import Dict, Optional
 from constants import SOUND_COOLDOWN_MS
 
 
 # Determine the base directory for resources (handles both dev and bundled exe)
 if getattr(sys, 'frozen', False):
-    BASE_DIR = sys._MEIPASS
+    BASE_DIR: str = sys._MEIPASS
 else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
 
 # Audio is available on Windows with winsound
-AUDIO_AVAILABLE = True
+AUDIO_AVAILABLE: bool = True
 
 # Sound effects dictionary - maps sound names to file paths
-SOUND_EFFECTS = {
+SOUND_EFFECTS: Dict[str, str] = {
     'black_hole_detonate': os.path.join(BASE_DIR, 'sounds/black_hole_detonate.wav'),
     'projectile_hit': os.path.join(BASE_DIR, 'sounds/projectile_hit.wav'),
     'enemy_death': os.path.join(BASE_DIR, 'sounds/enemy_death.wav'),
@@ -29,22 +30,22 @@ SOUND_EFFECTS = {
 }
 
 # Background music file
-BACKGROUND_MUSIC = os.path.join(BASE_DIR, 'sounds/bit track space.wav')
+BACKGROUND_MUSIC: str = os.path.join(BASE_DIR, 'sounds/bit track space.wav')
 
 
 class AudioManager:
     """Manages all audio playback including effects, beeps, and background music."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize audio manager with throttling and state tracking."""
-        self._last_sound_time = {}  # Track when each sound was last played
-        self._music_thread = None
-        self._music_stop_event = None
-        self.sound_enabled = True
-        self.music_enabled = True
+        self._last_sound_time: Dict[str, float] = {}  # Track when each sound was last played
+        self._music_thread: Optional[threading.Thread] = None
+        self._music_stop_event: Optional[threading.Event] = None
+        self.sound_enabled: bool = True
+        self.music_enabled: bool = True
     
-    def play_sound_async(self, sound_name: str, frequency: int = None, 
-                        duration: int = None) -> None:
+    def play_sound_async(self, sound_name: str, frequency: Optional[int] = None, 
+                        duration: Optional[int] = None) -> None:
         """
         Play a sound asynchronously. Can use custom sound file or fallback to beep.
         
@@ -177,7 +178,7 @@ class AudioManager:
 
 
 # Global audio manager instance
-audio_manager = None
+audio_manager: Optional[AudioManager] = None
 
 
 def get_audio_manager() -> AudioManager:
@@ -189,8 +190,8 @@ def get_audio_manager() -> AudioManager:
 
 
 # Legacy module-level functions for backward compatibility
-def play_sound_async(sound_name: str, frequency: int = None, 
-                    duration: int = None, game_instance=None) -> None:
+def play_sound_async(sound_name: str, frequency: Optional[int] = None, 
+                    duration: Optional[int] = None, game_instance=None) -> None:
     """Legacy function - delegates to AudioManager."""
     manager = get_audio_manager()
     if game_instance is not None:

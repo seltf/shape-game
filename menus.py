@@ -5,6 +5,7 @@ Extracts menu logic from the Game class for better organization and reusability.
 
 import tkinter as tk
 import random
+from typing import Dict, List, Optional, Any, Tuple
 from constants import (
     WIDTH, HEIGHT,
     WEAPON_UPGRADES, LINKED_UPGRADES
@@ -15,29 +16,29 @@ from audio import stop_background_music, start_background_music
 class MenuManager:
     """Manages all menu display and interaction (upgrade, pause, dev menus)."""
     
-    def __init__(self, game):
+    def __init__(self, game: Any) -> None:
         """Initialize MenuManager with reference to the Game instance."""
-        self.game = game
-        self.canvas = game.canvas
+        self.game: Any = game
+        self.canvas: tk.Canvas = game.canvas
         
         # Upgrade menu state
-        self.upgrade_menu_active = False
-        self.upgrade_menu_clickable = False
-        self.upgrade_menu_elements = []
-        self.upgrade_buttons = {}
-        self.upgrade_choices = []
+        self.upgrade_menu_active: bool = False
+        self.upgrade_menu_clickable: bool = False
+        self.upgrade_menu_elements: List[int] = []
+        self.upgrade_buttons: Dict[str, int] = {}
+        self.upgrade_choices: List[str] = []
         
         # Pause menu state
-        self.pause_menu_id = None
-        self.pause_menu_elements = []
-        self.pause_buttons = {}
+        self.pause_menu_id: Optional[int] = None
+        self.pause_menu_elements: List[int] = []
+        self.pause_buttons: Dict[str, int] = {}
         
         # Dev menu state
-        self.dev_menu_active = False
-        self.dev_menu_elements = []
-        self.dev_buttons = {}
+        self.dev_menu_active: bool = False
+        self.dev_menu_elements: List[int] = []
+        self.dev_buttons: Dict[str, int] = {}
 
-    def show_upgrade_menu(self):
+    def show_upgrade_menu(self) -> None:
         """Display upgrade selection menu with three random choices."""
         try:
             self.upgrade_menu_active = True
@@ -154,7 +155,7 @@ class MenuManager:
             self.upgrade_menu_active = False
             self.game.paused = False
 
-    def on_upgrade_selection(self, upgrade_key):
+    def on_upgrade_selection(self, upgrade_key: str) -> None:
         """Handle upgrade selection."""
         try:
             if upgrade_key in self.upgrade_choices:
@@ -165,7 +166,7 @@ class MenuManager:
             self.upgrade_menu_active = False
             self.game.paused = False
 
-    def close_upgrade_menu(self):
+    def close_upgrade_menu(self) -> None:
         """Close the upgrade menu."""
         self.upgrade_menu_active = False
         self.upgrade_menu_clickable = False
@@ -183,7 +184,7 @@ class MenuManager:
         self.upgrade_buttons = {}
         self.upgrade_choices = []
 
-    def show_pause_menu(self):
+    def show_pause_menu(self) -> None:
         """Display pause menu overlay on the game canvas."""
         self.game.paused = True
         
@@ -368,7 +369,7 @@ class MenuManager:
         self.pause_menu_elements.append(self.pause_buttons['dev'])
         self.pause_menu_elements.append(dev_text)
 
-    def hide_pause_menu(self):
+    def hide_pause_menu(self) -> None:
         """Hide the pause menu and resume the game."""
         # Explicitly clear everything
         self.game.paused = False
@@ -387,19 +388,19 @@ class MenuManager:
                     pass  # Element may already be deleted
             self.pause_menu_elements = []
 
-    def quit_game(self):
+    def quit_game(self) -> None:
         """Close the game window and exit."""
         stop_background_music()
         self.game.root.destroy()
 
-    def toggle_sound(self):
+    def toggle_sound(self) -> None:
         """Toggle sound on/off and refresh pause menu to show new state."""
         self.game.sound_enabled = not self.game.sound_enabled
         # Close and reopen pause menu to update the sound button text
         self.hide_pause_menu()
         self.show_pause_menu()
 
-    def toggle_music(self):
+    def toggle_music(self) -> None:
         """Toggle music on/off and refresh pause menu to show new state."""
         self.game.music_enabled = not self.game.music_enabled
         if not self.game.music_enabled:
@@ -410,14 +411,14 @@ class MenuManager:
         self.hide_pause_menu()
         self.show_pause_menu()
 
-    def toggle_keyboard_layout(self):
+    def toggle_keyboard_layout(self) -> None:
         """Toggle between Dvorak and QWERTY keyboard layouts and refresh pause menu."""
         self.game.keyboard_layout = 'qwerty' if self.game.keyboard_layout == 'dvorak' else 'dvorak'
         # Close and reopen pause menu to update the keyboard button text
         self.hide_pause_menu()
         self.show_pause_menu()
 
-    def show_dev_menu(self):
+    def show_dev_menu(self) -> None:
         """Display the developer testing menu."""
         self.dev_menu_active = True
         
@@ -493,7 +494,7 @@ class MenuManager:
             )
             self.dev_menu_elements.append(text_id)
 
-    def _handle_dev_menu_action(self, action):
+    def _handle_dev_menu_action(self, action: str) -> None:
         """Handle dev menu button actions."""
         try:
             if action == 'upgrade_extra_bounce':
@@ -536,7 +537,7 @@ class MenuManager:
         except Exception as e:
             print(f"Error in dev action '{action}': {e}")
 
-    def close_dev_menu(self):
+    def close_dev_menu(self) -> None:
         """Close the dev menu and return to pause menu."""
         for element_id in self.dev_menu_elements:
             try:
@@ -552,7 +553,7 @@ class MenuManager:
         self.hide_pause_menu()
         self.show_pause_menu()
 
-    def handle_upgrade_menu_click(self, event):
+    def handle_upgrade_menu_click(self, event: tk.Event) -> None:
         """Handle clicks in the upgrade menu."""
         if not self.upgrade_menu_active or not self.upgrade_menu_clickable:
             return
@@ -581,7 +582,7 @@ class MenuManager:
         sys.stdout.write(f"[DEBUG] No upgrade button matched click, returning\n")
         sys.stdout.flush()
 
-    def handle_pause_menu_click(self, event):
+    def handle_pause_menu_click(self, event: tk.Event) -> None:
         """Handle clicks in the pause menu."""
         if not self.game.paused or self.dev_menu_active:
             return
@@ -608,7 +609,7 @@ class MenuManager:
                         self.show_dev_menu()
                     return
 
-    def handle_dev_menu_click(self, event):
+    def handle_dev_menu_click(self, event: tk.Event) -> None:
         """Handle clicks in the dev menu."""
         if not self.dev_menu_active:
             return

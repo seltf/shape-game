@@ -6,6 +6,7 @@ Contains all entity classes: BlackHole, Player, Enemy types, Particles, Shards, 
 import tkinter as tk
 import math
 import random
+from typing import Optional, List, Set, Tuple, Any, Dict
 from constants import *
 from audio import play_sound_async, play_beep_async
 
@@ -15,24 +16,24 @@ class BlackHole:
     Represents a black hole effect spawned by weapon hits.
     Pulls and kills enemies in its radius when it detonates.
     """
-    def __init__(self, canvas, x, y, radius, game, level=1):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, radius: int, game: Any, level: int = 1) -> None:
         """Initialize black hole at (x, y) with given radius."""
-        self.canvas = canvas
-        self.game = game
-        self.x = x
-        self.y = y
-        self.radius = radius
-        self.level = level  # Store upgrade level for damage calculation
-        self.time_alive = 0  # Track lifetime in milliseconds
-        self.detonation_phase = False
+        self.canvas: tk.Canvas = canvas
+        self.game: Any = game
+        self.x: float = x
+        self.y: float = y
+        self.radius: int = radius
+        self.level: int = level  # Store upgrade level for damage calculation
+        self.time_alive: int = 0  # Track lifetime in milliseconds
+        self.detonation_phase: bool = False
         # Visual representation - only outline, no fill so enemies are visible
-        self.rect = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, 
+        self.rect: int = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, 
                                            fill='', outline='#6600ff', width=2)
         # Animated rings during pull phase
-        self.active_rings = []  # Track canvas IDs of active animated rings
-        self.ring_spawn_counter = 0  # Counter to spawn rings at intervals
+        self.active_rings: List[List[Any]] = []  # Track canvas IDs of active animated rings
+        self.ring_spawn_counter: int = 0  # Counter to spawn rings at intervals
     
-    def update(self):
+    def update(self) -> bool:
         """Update black hole and check for detonation."""
         self.time_alive += 50  # Update is called every 50ms
         
@@ -54,7 +55,7 @@ class BlackHole:
         
         return True
     
-    def _start_detonation(self):
+    def _start_detonation(self) -> None:
         """Start the detonation sequence with visual effects."""
         # Create explosion animation expanding from black hole
         for ring in range(3):
@@ -73,7 +74,7 @@ class BlackHole:
             
             self.canvas.after(150 + (ring * 50), delete_ring)
     
-    def _pull_enemies(self):
+    def _pull_enemies(self) -> None:
         """Pull all nearby enemies toward the black hole center."""
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
@@ -103,7 +104,7 @@ class BlackHole:
                 enemy.being_pulled = True
                 enemy.pull_timer = 1  # Reset pull timer to 1 frame
     
-    def _update_rings(self):
+    def _update_rings(self) -> None:
         """Update animated rings, spawning new ones and shrinking existing ones."""
         # Spawn a new ring every 400ms (8 updates at 50ms per update)
         self.ring_spawn_counter += 1
@@ -144,7 +145,7 @@ class BlackHole:
             if ring_data in self.active_rings:
                 self.active_rings.remove(ring_data)
     
-    def _spawn_new_ring(self):
+    def _spawn_new_ring(self) -> None:
         """Spawn a new animated ring at the edge of the pull radius."""
         ring_size = self.radius
         ring_id = self.canvas.create_oval(
@@ -155,7 +156,7 @@ class BlackHole:
         # Store ring data as [id, current_size, max_size]
         self.active_rings.append([ring_id, ring_size, ring_size])
     
-    def _cleanup_rings(self):
+    def _cleanup_rings(self) -> None:
         """Remove all animated rings from canvas."""
         for ring_data in self.active_rings:
             ring_id = ring_data[0]
@@ -165,7 +166,7 @@ class BlackHole:
                 pass
         self.active_rings.clear()
     
-    def _kill_enemies_at_center(self):
+    def _kill_enemies_at_center(self) -> None:
         """Deal damage to enemies in radius and fling them outward."""
         # Play custom black hole detonation sound or fallback to THWOMP effect
         print(f"[ACTION] Black hole detonating at center ({self.x}, {self.y})")
@@ -236,7 +237,7 @@ class BlackHole:
         # Update score display
         self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
     
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove black hole from canvas."""
         try:
             self.canvas.delete(self.rect)
@@ -249,22 +250,22 @@ class Player:
     Represents the player character in the game.
     Handles position, movement, and rendering.
     """
-    def __init__(self, canvas, x, y, size):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize player at (x, y) with given size."""
-        self.canvas = canvas
-        self.size = size
-        self.x = x
-        self.y = y
-        self.vx = 0  # Velocity x
-        self.vy = 0  # Velocity y
-        self.health = 1  # Player starts with 1 HP
-        self.shield_active = False  # Whether shield is currently up
-        self.shield_cooldown = 0  # Cooldown counter in milliseconds
-        self.shield_rings = []  # List of canvas objects for shield rings (multiple rings for levels)
-        self.shield_level = 0  # Current shield level (0-3)
-        self.rect = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = 0  # Velocity x
+        self.vy: float = 0  # Velocity y
+        self.health: int = 1  # Player starts with 1 HP
+        self.shield_active: bool = False  # Whether shield is currently up
+        self.shield_cooldown: int = 0  # Cooldown counter in milliseconds
+        self.shield_rings: List[Optional[int]] = []  # List of canvas objects for shield rings (multiple rings for levels)
+        self.shield_level: int = 0  # Current shield level (0-3)
+        self.rect: int = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
 
-    def move(self, accel_x, accel_y, speed_boost=0):
+    def move(self, accel_x: float, accel_y: float, speed_boost: float = 0) -> None:
         """Apply acceleration to player velocity and update position."""
         # Apply acceleration
         self.vx += accel_x * PLAYER_ACCELERATION
@@ -297,11 +298,11 @@ class Player:
                                       self.x - shield_radius, self.y - shield_radius,
                                       self.x + shield_radius, self.y + shield_radius)
 
-    def get_center(self):
+    def get_center(self) -> Tuple[float, float]:
         """Return the center coordinates of the player circle."""
         return self.x, self.y
 
-    def activate_shield(self):
+    def activate_shield(self) -> None:
         """Activate the shield rings around the player based on shield level."""
         if not self.shield_active:
             self.shield_active = True
@@ -317,7 +318,7 @@ class Player:
                 )
                 self.shield_rings.append(ring)
 
-    def deactivate_shield(self, enemy=None):
+    def deactivate_shield(self, enemy: Optional[Any] = None) -> None:
         """Remove one shield ring and push back nearby enemies. Start cooldown if all rings destroyed."""
         try:
             # Remove one ring from the display
@@ -363,7 +364,7 @@ class Player:
         except Exception as e:
             print(f"[ERROR] Shield deactivation failed: {e}")
 
-    def update_shield(self, dt_ms):
+    def update_shield(self, dt_ms: int) -> None:
         """Update shield cooldown (dt_ms is delta time in milliseconds)."""
         if not self.shield_active and self.shield_cooldown > 0:
             self.shield_cooldown -= dt_ms
@@ -376,24 +377,24 @@ class Enemy:
     Represents an enemy in the game.
     Handles position, movement towards the player, and rendering.
     """
-    def __init__(self, canvas, x, y, size):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize enemy at (x, y) with given size."""
-        self.canvas = canvas
-        self.size = size
-        self.x = x
-        self.y = y
-        self.being_pulled = False  # Whether currently pulled by black hole
-        self.pull_velocity_x = 0  # Pull force direction X
-        self.pull_velocity_y = 0  # Pull force direction Y
-        self.pull_timer = 0  # Frames remaining to be pulled
-        self.being_pushed = False  # Whether currently pushed by shield
-        self.push_velocity_x = 0  # Push force direction X
-        self.push_velocity_y = 0  # Push force direction Y
-        self.push_timer = 0  # Frames remaining to be pushed
-        self.shield_immunity = 0  # Frames of immunity after shield hit
-        self.rect = self.canvas.create_rectangle(x, y, x+size, y+size, fill='red')
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.being_pulled: bool = False  # Whether currently pulled by black hole
+        self.pull_velocity_x: float = 0  # Pull force direction X
+        self.pull_velocity_y: float = 0  # Pull force direction Y
+        self.pull_timer: int = 0  # Frames remaining to be pulled
+        self.being_pushed: bool = False  # Whether currently pushed by shield
+        self.push_velocity_x: float = 0  # Push force direction X
+        self.push_velocity_y: float = 0  # Push force direction Y
+        self.push_timer: int = 0  # Frames remaining to be pushed
+        self.shield_immunity: int = 0  # Frames of immunity after shield hit
+        self.rect: int = self.canvas.create_rectangle(x, y, x+size, y+size, fill='red')
 
-    def move_towards(self, target_x, target_y, speed=5):
+    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
@@ -420,7 +421,7 @@ class Enemy:
         
         self.canvas.coords(self.rect, self.x, self.y, self.x+self.size, self.y+self.size)
 
-    def get_position(self):
+    def get_position(self) -> Tuple[float, float]:
         """Return the top-left coordinates of the enemy rectangle."""
         return self.x, self.y
 
@@ -430,32 +431,32 @@ class TriangleEnemy:
     Represents a triangle enemy that takes three hits to defeat.
     Tougher than the basic square enemy.
     """
-    def __init__(self, canvas, x, y, size):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize triangle enemy at (x, y) with given size."""
-        self.canvas = canvas
-        self.size = size
-        self.x = x
-        self.y = y
-        self.health = 5  # Takes 5 hits to kill
-        self.being_pulled = False  # Whether currently pulled by black hole
-        self.pull_velocity_x = 0  # Pull force direction X
-        self.pull_velocity_y = 0  # Pull force direction Y
-        self.pull_timer = 0  # Frames remaining to be pulled
-        self.being_pushed = False  # Whether currently pushed by shield
-        self.push_velocity_x = 0  # Push force direction X
-        self.push_velocity_y = 0  # Push force direction Y
-        self.push_timer = 0  # Frames remaining to be pushed
-        self.shield_immunity = 0  # Frames of immunity after shield hit
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.health: int = 5  # Takes 5 hits to kill
+        self.being_pulled: bool = False  # Whether currently pulled by black hole
+        self.pull_velocity_x: float = 0  # Pull force direction X
+        self.pull_velocity_y: float = 0  # Pull force direction Y
+        self.pull_timer: int = 0  # Frames remaining to be pulled
+        self.being_pushed: bool = False  # Whether currently pushed by shield
+        self.push_velocity_x: float = 0  # Push force direction X
+        self.push_velocity_y: float = 0  # Push force direction Y
+        self.push_timer: int = 0  # Frames remaining to be pushed
+        self.shield_immunity: int = 0  # Frames of immunity after shield hit
         # Draw triangle using create_polygon
         # Triangle points: top center, bottom-left, bottom-right
-        self.points = [
+        self.points: List[float] = [
             x + size//2, y,  # top center
             x, y + size,     # bottom-left
             x + size, y + size  # bottom-right
         ]
-        self.rect = self.canvas.create_polygon(*self.points, fill='orange')
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='orange')
 
-    def move_towards(self, target_x, target_y, speed=5):
+    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
         # Apply pull force if being pulled by black hole
         if self.being_pulled and self.pull_timer > 0:
@@ -481,11 +482,11 @@ class TriangleEnemy:
         ]
         self.canvas.coords(self.rect, *self.points)
 
-    def get_position(self):
+    def get_position(self) -> Tuple[float, float]:
         """Return the center-ish coordinates of the enemy for collision."""
         return self.x, self.y
     
-    def take_damage(self):
+    def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
         return self.health > 0
@@ -496,29 +497,29 @@ class PentagonEnemy:
     Represents a pentagon tank enemy that's tougher than triangles.
     Takes many hits but gives good XP.
     """
-    def __init__(self, canvas, x, y, size):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize pentagon enemy at (x, y) with given size."""
-        self.canvas = canvas
-        self.size = size
-        self.x = x
-        self.y = y
-        self.health = 8  # Takes 8 hits to kill (tank)
-        self.being_pulled = False  # Whether currently pulled by black hole
-        self.pull_velocity_x = 0  # Pull force direction X
-        self.pull_velocity_y = 0  # Pull force direction Y
-        self.pull_timer = 0  # Frames remaining to be pulled
-        self.being_pushed = False  # Whether currently pushed by shield
-        self.push_velocity_x = 0  # Push force direction X
-        self.push_velocity_y = 0  # Push force direction Y
-        self.push_timer = 0  # Frames remaining to be pushed
-        self.shield_immunity = 0  # Frames of immunity after shield hit
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.health: int = 8  # Takes 8 hits to kill (tank)
+        self.being_pulled: bool = False  # Whether currently pulled by black hole
+        self.pull_velocity_x: float = 0  # Pull force direction X
+        self.pull_velocity_y: float = 0  # Pull force direction Y
+        self.pull_timer: int = 0  # Frames remaining to be pulled
+        self.being_pushed: bool = False  # Whether currently pushed by shield
+        self.push_velocity_x: float = 0  # Push force direction X
+        self.push_velocity_y: float = 0  # Push force direction Y
+        self.push_timer: int = 0  # Frames remaining to be pushed
+        self.shield_immunity: int = 0  # Frames of immunity after shield hit
         # Draw pentagon using create_polygon
-        self.points = self._calculate_pentagon_points(x, y, size)
-        self.rect = self.canvas.create_polygon(*self.points, fill='purple')
+        self.points: List[float] = self._calculate_pentagon_points(x, y, size)
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='purple')
     
-    def _calculate_pentagon_points(self, x, y, size):
+    def _calculate_pentagon_points(self, x: float, y: float, size: int) -> List[float]:
         """Calculate the 5 points of a regular pentagon."""
-        points = []
+        points: List[float] = []
         for i in range(5):
             angle = (2 * math.pi * i / 5) - (math.pi / 2)  # Start from top
             px = x + size//2 + int((size//2) * math.cos(angle))
@@ -526,7 +527,7 @@ class PentagonEnemy:
             points.extend([px, py])
         return points
     
-    def move_towards(self, target_x, target_y, speed=5):
+    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
         # Apply pull force if being pulled by black hole
         if self.being_pulled and self.pull_timer > 0:
@@ -548,11 +549,11 @@ class PentagonEnemy:
         self.points = self._calculate_pentagon_points(self.x, self.y, self.size)
         self.canvas.coords(self.rect, *self.points)
     
-    def get_position(self):
+    def get_position(self) -> Tuple[float, float]:
         """Return the center coordinates of the enemy for collision."""
         return self.x, self.y
     
-    def take_damage(self):
+    def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
         return self.health > 0
@@ -562,18 +563,18 @@ class Particle:
     """
     Represents a particle in a death poof effect.
     """
-    def __init__(self, canvas, x, y, vx, vy, life):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, life: int) -> None:
         """Initialize particle at (x, y) with velocity (vx, vy) and lifespan."""
-        self.canvas = canvas
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.life = life
-        self.max_life = life
-        self.rect = self.canvas.create_oval(x-2, y-2, x+2, y+2, fill='orange')
+        self.canvas: tk.Canvas = canvas
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = vx
+        self.vy: float = vy
+        self.life: int = life
+        self.max_life: int = life
+        self.rect: int = self.canvas.create_oval(x-2, y-2, x+2, y+2, fill='orange')
 
-    def update(self):
+    def update(self) -> bool:
         """Update particle position and lifespan."""
         self.x += self.vx
         self.y += self.vy
@@ -584,7 +585,7 @@ class Particle:
         self.canvas.coords(self.rect, self.x-2, self.y-2, self.x+2, self.y+2)
         return self.life > 0
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove particle from canvas."""
         try:
             self.canvas.delete(self.rect)
@@ -596,20 +597,21 @@ class Shard:
     """
     Represents a shrapnel shard that scatters from a projectile impact.
     """
-    def __init__(self, canvas, x, y, vx, vy, game, lifetime=1000, explosive=False):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any, 
+                 lifetime: int = 1000, explosive: bool = False) -> None:
         """Initialize shard at (x, y) with velocity (vx, vy) and lifetime in milliseconds."""
-        self.canvas = canvas
-        self.game = game
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.lifetime = lifetime  # milliseconds
-        self.time_alive = 0
-        self.explosive = explosive  # Whether this shard explodes on impact
-        self.rect = self.canvas.create_oval(x-2, y-2, x+2, y+2, fill='white' if not explosive else 'red')
+        self.canvas: tk.Canvas = canvas
+        self.game: Any = game
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = vx
+        self.vy: float = vy
+        self.lifetime: int = lifetime  # milliseconds
+        self.time_alive: int = 0
+        self.explosive: bool = explosive  # Whether this shard explodes on impact
+        self.rect: int = self.canvas.create_oval(x-2, y-2, x+2, y+2, fill='white' if not explosive else 'red')
     
-    def update(self):
+    def update(self) -> bool:
         """Update shard position and lifetime, check for enemy collisions."""
         self.time_alive += 50  # Update is called every 50ms
         
@@ -674,12 +676,12 @@ class Shard:
         
         # Check if lifetime expired
         return self.time_alive < self.lifetime
-    
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove shard from canvas."""
         try:
             self.canvas.delete(self.rect)
         except tk.TclError:
+            pass  # Canvas item may have already been deleted
             pass  # Canvas item may have already been deleted
 
 
@@ -687,32 +689,32 @@ class Projectile:
     """
     Represents a projectile that ricochets between enemies with homing effect.
     """
-    def __init__(self, canvas, x, y, vx, vy, game):
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any) -> None:
         """Initialize projectile at (x, y) with velocity (vx, vy)."""
-        self.canvas = canvas
-        self.game = game
-        self.x = x
-        self.y = y
-        self.vx = vx
-        self.vy = vy
-        self.rect = self.canvas.create_oval(x-4, y-4, x+4, y+4, fill='yellow')
-        self.hit_enemies = set()  # Track enemies already hit
-        self.bounces = 0
+        self.canvas: tk.Canvas = canvas
+        self.game: Any = game
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = vx
+        self.vy: float = vy
+        self.rect: int = self.canvas.create_oval(x-4, y-4, x+4, y+4, fill='yellow')
+        self.hit_enemies: Set[int] = set()  # Track enemies already hit
+        self.bounces: int = 0
         # Get weapon stats from game's computed stats
-        stats = game.computed_weapon_stats
-        self.max_bounces = stats.get('bounces', 0)
-        self.allow_splits = stats.get('splits', False)
-        self.shrapnel_level = stats.get('shrapnel', 0)
-        self.homing_strength = stats.get('homing', 0.15)
-        self.speed = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
-        self.chain_lightning_level = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
-        self.black_hole_level = stats.get('black_hole', 0)  # Black hole upgrade level
-        self.current_target = self._find_closest_target()  # Initial target for homing
-        self.time_alive = 0  # Track lifetime in milliseconds
-        self.returning = False  # Whether projectile is returning to player
-        self.is_mini_fork = False  # Whether this is a mini-fork that can only chain once
+        stats: Dict[str, Any] = game.computed_weapon_stats
+        self.max_bounces: int = stats.get('bounces', 0)
+        self.allow_splits: bool = stats.get('splits', False)
+        self.shrapnel_level: int = stats.get('shrapnel', 0)
+        self.homing_strength: float = stats.get('homing', 0.15)
+        self.speed: int = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
+        self.chain_lightning_level: int = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
+        self.black_hole_level: int = stats.get('black_hole', 0)  # Black hole upgrade level
+        self.current_target: Optional[Any] = self._find_closest_target()  # Initial target for homing
+        self.time_alive: int = 0  # Track lifetime in milliseconds
+        self.returning: bool = False  # Whether projectile is returning to player
+        self.is_mini_fork: bool = False  # Whether this is a mini-fork that can only chain once
 
-    def update(self):
+    def update(self) -> bool:
         """Update projectile position and check for collisions."""
         # Track lifetime
         self.time_alive += 50  # Update is called every 50ms
@@ -971,10 +973,10 @@ class Projectile:
         
         return True
     
-    def _find_closest_target(self):
+    def _find_closest_target(self) -> Optional[Any]:
         """Find the closest unhit enemy for initial homing."""
-        closest = None
-        closest_dist_sq = float('inf')
+        closest: Optional[Any] = None
+        closest_dist_sq: float = float('inf')
         for enemy in self.game.enemies:
             ex, ey = enemy.get_position()
             ex_center = ex + ENEMY_SIZE_HALF
@@ -987,10 +989,10 @@ class Projectile:
                 closest = enemy
         return closest
     
-    def _find_next_target(self):
+    def _find_next_target(self) -> Optional[Any]:
         """Find the closest unhit enemy for ricochet."""
-        closest = None
-        closest_dist_sq = float('inf')
+        closest: Optional[Any] = None
+        closest_dist_sq: float = float('inf')
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
@@ -1005,9 +1007,9 @@ class Projectile:
                 closest = enemy
         return closest
     
-    def _find_nearby_enemies_for_chain(self, chain_range=150):
+    def _find_nearby_enemies_for_chain(self, chain_range: int = 150) -> List[Any]:
         """Find nearby unhit enemies for chain lightning (within range)."""
-        nearby = []
+        nearby: List[Tuple[float, Any]] = []
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
@@ -1020,7 +1022,7 @@ class Projectile:
         # Return sorted by distance (closest first)
         return [enemy for dist, enemy in sorted(nearby, key=lambda x: x[0])]
     
-    def _strike_lightning_target(self, target_enemy):
+    def _strike_lightning_target(self, target_enemy: Any) -> None:
         """Strike a target enemy with chain lightning, dealing damage and effects."""
         if target_enemy not in self.game.enemies:
             return  # Enemy already dead
@@ -1070,7 +1072,7 @@ class Projectile:
             print(f"[ACTION] Chain lightning killed enemy")
             play_beep_async(250, 20, self.game)
     
-    def _create_mini_fork(self, target_enemy):
+    def _create_mini_fork(self, target_enemy: Any) -> None:
         """Create a mini-fork lightning to a target enemy. Mini-forks only chain once."""
         tx, ty = target_enemy.get_position()
         tx_center = tx + ENEMY_SIZE // 2
@@ -1099,7 +1101,7 @@ class Projectile:
         mini_fork_proj.chain_lightning_level = 0  # Mini-forks don't chain
         self.game.projectiles.append(mini_fork_proj)
     
-    def _create_fork_from_target(self, target_enemy):
+    def _create_fork_from_target(self, target_enemy: Any) -> None:
         """Create a forking lightning from a target enemy, attempting to chain to one nearby enemy."""
         tx, ty = target_enemy.get_position()
         tx_center = tx + ENEMY_SIZE_HALF
@@ -1151,7 +1153,7 @@ class Projectile:
             # Strike the fork target
             self._strike_lightning_target(fork_target)
     
-    def _try_spawn_black_hole(self, x, y):
+    def _try_spawn_black_hole(self, x: float, y: float) -> None:
         """Try to spawn a black hole at the given position based on black hole level."""
         # Only allow one black hole at a time
         if len(self.game.black_holes) > 0:
@@ -1171,7 +1173,7 @@ class Projectile:
         black_hole = BlackHole(self.game.canvas, x, y, radius, self.game, self.black_hole_level)
         self.game.black_holes.append(black_hole)
     
-    def _create_split_projectiles(self):
+    def _create_split_projectiles(self) -> None:
         """Create two split projectiles branching off at angles."""
         # Calculate current velocity angle
         current_angle = math.atan2(self.vy, self.vx)
@@ -1190,7 +1192,7 @@ class Projectile:
             new_projectile.homing_strength = self.homing_strength
             new_projectile.allow_splits = self.allow_splits
     
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Remove projectile from canvas."""
         try:
             self.canvas.delete(self.rect)

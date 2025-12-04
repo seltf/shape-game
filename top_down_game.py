@@ -5,6 +5,7 @@ import threading
 import os
 import sys
 from pathlib import Path
+from typing import List, Dict, Any, Optional, Tuple
 
 # Import from separate modules
 from constants import *
@@ -1198,10 +1199,10 @@ class Game:
     """
     Main game class. Handles game state, input, rendering, and logic.
     """
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk) -> None:
         """Initialize the game window, player, enemies, and event bindings."""
-        self.root = root
-        self.canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
+        self.root: tk.Tk = root
+        self.canvas: tk.Canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
         self.canvas.pack()
         
         # Draw starfield background
