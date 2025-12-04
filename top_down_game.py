@@ -89,6 +89,8 @@ class Game:
         self.keyboard_layout = 'dvorak'  # 'dvorak' or 'qwerty'
         self.game_over_active = False  # Whether game over screen is showing
         self.game_over_restart_btn = None  # Reference to restart button
+        self.auto_fire_enabled = False  # Auto-fire toggle
+        self.attack_cooldown = 0  # Milliseconds until next attack available
         
         # Start background music
         start_background_music(self)
@@ -459,6 +461,9 @@ class Game:
         
         if event.keysym in keysym_map:
             self.pressed_keys.add(keysym_map[event.keysym])
+        elif event.keysym == 'e':  # E key (toggle auto-fire)
+            self.auto_fire_enabled = not self.auto_fire_enabled
+            print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
         elif event.keysym == 'Escape':
             # If dev menu is open, close it
             if self.menu_manager.dev_menu_active:
@@ -514,6 +519,14 @@ class Game:
         try:
             # Track time played
             self.game_time_ms += 50
+            
+            # Update attack cooldown
+            if self.attack_cooldown > 0:
+                self.attack_cooldown -= 50
+            
+            # Auto-fire if enabled and cooldown is ready
+            if self.auto_fire_enabled and self.attack_cooldown <= 0:
+                self.attack()
             
             self.handle_player_movement()
             self.move_enemies()
@@ -893,6 +906,9 @@ class Game:
         # Set homing from weapon stats (0 by default, 0.15 if Homing upgrade owned)
         projectile.homing_strength = self.computed_weapon_stats['homing']
         self.projectiles.append(projectile)
+        
+        # Set attack cooldown (500ms from PROJECTILE_RETURN_TIME_MS)
+        self.attack_cooldown = PROJECTILE_RETURN_TIME_MS
 
 if __name__ == '__main__':
     root = tk.Tk()

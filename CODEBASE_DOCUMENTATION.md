@@ -517,6 +517,17 @@ def cleanup(self):
 
 ## AI Agent Instructions for Code Modifications
 
+**⚠️ CRITICAL: DOCUMENTATION MAINTENANCE**
+
+**ANY AI agent working on this codebase MUST update CODEBASE_DOCUMENTATION.md whenever:**
+- New features are added (upgrades, entities, mechanics)
+- Game architecture changes
+- New modules or significant refactoring occurs
+- Coordinate system behavior changes
+- New common patterns or best practices emerge
+
+**The documentation is the contract between developers. Stale documentation leads to duplicated bugs and wasted time. ALWAYS keep docs current with code changes.**
+
 When an AI agent is tasked with modifying, debugging, or expanding this codebase, the following guidelines ensure quality, consistency, and maintainability:
 
 ### Pre-Modification Checklist
@@ -824,6 +835,7 @@ dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
 
 Before completing any task, verify:
 
+- [ ] **Documentation updated** (CRITICAL - update CODEBASE_DOCUMENTATION.md if features/architecture changed)
 - [ ] All tests pass (28/28)
 - [ ] Type hints on all functions
 - [ ] Docstrings on all functions
