@@ -817,11 +817,13 @@ class Game:
         """Handle game over - show game over screen."""
         self.paused = True
         self.game_over_active = True  # Flag to indicate game over screen is active
-        # Create game over overlay
-        overlay_width = WIDTH // 2
-        overlay_height = HEIGHT // 4
-        overlay_x = (WIDTH - overlay_width) // 2
-        overlay_y = (HEIGHT - overlay_height) // 2
+        
+        # Calculate overlay size based on actual content
+        # Title + Score + Button with padding: 60 + 40 + 50 + 60 = 210 pixels high
+        overlay_width = 400
+        overlay_height = 210
+        overlay_x = (self.window_width - overlay_width) // 2
+        overlay_y = (self.window_height - overlay_height) // 2
         
         # Background
         self.canvas.create_rectangle(
@@ -832,7 +834,7 @@ class Game:
         
         # Game Over text
         self.canvas.create_text(
-            WIDTH // 2, overlay_y + 30,
+            overlay_x + overlay_width // 2, overlay_y + 30,
             text='GAME OVER',
             fill='red',
             font=('Arial', 48, 'bold')
@@ -840,7 +842,7 @@ class Game:
         
         # Score text
         self.canvas.create_text(
-            WIDTH // 2, overlay_y + 90,
+            overlay_x + overlay_width // 2, overlay_y + 80,
             text=f'Final Score: {self.score}',
             fill='yellow',
             font=('Arial', 24)
@@ -849,7 +851,7 @@ class Game:
         # Restart button
         btn_width = 200
         btn_height = 50
-        btn_x = (WIDTH - btn_width) // 2
+        btn_x = overlay_x + (overlay_width - btn_width) // 2
         btn_y = overlay_y + 140
         
         self.game_over_restart_btn = self.canvas.create_rectangle(
@@ -858,7 +860,7 @@ class Game:
             fill='green', outline='white', width=2
         )
         self.canvas.create_text(
-            WIDTH // 2, btn_y + 25,
+            overlay_x + overlay_width // 2, btn_y + 25,
             text='Restart',
             fill='white',
             font=('Arial', 20, 'bold')
