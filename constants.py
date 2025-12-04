@@ -56,7 +56,8 @@ WEAPON_STATS: Dict[str, Any] = {
     'bounces': 0,
     'splits': True,
     'shrapnel': 0,
-    'shield': 0
+    'shield': 0,
+    'attack_range': 500  # Base projectile return distance in pixels
 }
 
 # Weapon upgrades - modifiers that can be applied to base weapon
@@ -67,6 +68,7 @@ WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
+    'attack_range': {'attack_range': 250, 'name': 'Attack Range'},
 }
 
 # Linked upgrades - only appear if prerequisite(s) are owned

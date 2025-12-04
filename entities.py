@@ -719,15 +719,20 @@ class Projectile:
         self.time_alive: int = 0  # Track lifetime in milliseconds
         self.returning: bool = False  # Whether projectile is returning to player
         self.is_mini_fork: bool = False  # Whether this is a mini-fork that can only chain once
+        self.max_distance: float = stats.get('attack_range', 500)  # Maximum distance before returning
+        self.distance_traveled: float = 0  # Track distance from spawn point
 
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
         # Track lifetime
         self.time_alive += 50  # Update is called every 50ms
         
-        # Check if 0.5 seconds have passed - trigger return
+        # Check if max distance exceeded or 0.5 seconds have passed - trigger return
         if not self.returning and self.time_alive >= 500:  # 500ms = 0.5 seconds
-            print(f"[ACTION] Projectile returning to player after 2 seconds")
+            self.returning = True
+        
+        # Check if projectile has traveled beyond max range
+        if not self.returning and self.distance_traveled > self.max_distance:
             self.returning = True
         
         # Return animation
@@ -771,6 +776,8 @@ class Projectile:
         
         self.x += self.vx
         self.y += self.vy
+        # Track total distance traveled from spawn point
+        self.distance_traveled += math.hypot(self.vx, self.vy)
         self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
         
         # Check for enemy collision - use squared distances to avoid sqrt
