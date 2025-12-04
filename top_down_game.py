@@ -1328,7 +1328,7 @@ class Game:
             self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
             self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
             # Show upgrade menu on level up
-            if not self.upgrade_menu_active and not self.paused:
+            if not self.menu_manager.upgrade_menu_active and not self.paused:
                 self.show_upgrade_menu()
 
     def add_upgrade(self, upgrade_key):
@@ -1484,17 +1484,19 @@ class Game:
                             return
                 return  # Click outside button does nothing
             
-            # Route to appropriate menu handler
-            self.menu_manager.handle_upgrade_menu_click(event)
+            # If upgrade menu is open, only handle upgrade menu clicks
             if self.menu_manager.upgrade_menu_active:
+                self.menu_manager.handle_upgrade_menu_click(event)
                 return
             
-            self.menu_manager.handle_dev_menu_click(event)
+            # If dev menu is open, only handle dev menu clicks
             if self.menu_manager.dev_menu_active:
+                self.menu_manager.handle_dev_menu_click(event)
                 return
             
-            self.menu_manager.handle_pause_menu_click(event)
+            # If pause menu is open, only handle pause menu clicks
             if self.paused:
+                self.menu_manager.handle_pause_menu_click(event)
                 return
             
             # Otherwise, attack
@@ -1626,7 +1628,7 @@ class Game:
             self.pressed_keys.add(keysym_map[event.keysym])
         elif event.keysym == 'Escape':
             # If dev menu is open, close it
-            if self.dev_menu_active:
+            if self.menu_manager.dev_menu_active:
                 self.close_dev_menu()
             # If pause menu is open, close it (resume game)
             elif self.paused:
@@ -2030,7 +2032,7 @@ class Game:
     def attack(self):
         """Launch a projectile if none are active."""
         # Make sure we're not in a menu
-        if self.paused or self.upgrade_menu_active:
+        if self.paused or self.menu_manager.upgrade_menu_active:
             return
         
         # Check if there's a main projectile active (mini-forks don't block firing)

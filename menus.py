@@ -86,12 +86,16 @@ class MenuManager:
             
             self.upgrade_choices = random.sample(available_upgrades, min(3, len(available_upgrades)))
             
-            # Create overlay
-            menu_size = min(WIDTH, HEIGHT) // 2
-            overlay_x = (WIDTH - menu_size) // 2
-            overlay_y = (HEIGHT - menu_size) // 2
-            overlay_width = menu_size
-            overlay_height = menu_size
+            # Create overlay - use actual canvas dimensions
+            canvas_width = int(self.canvas.winfo_width())
+            canvas_height = int(self.canvas.winfo_height())
+            menu_width = int(canvas_width * 0.15)  # 15% of canvas width
+            # Height: title (30) + 3 buttons (50 each) + spacing (15*2) + padding (40) = 230
+            menu_height = 230
+            overlay_x = (canvas_width - menu_width) // 2
+            overlay_y = (canvas_height - menu_height) // 2
+            overlay_width = menu_width
+            overlay_height = menu_height
             
             # Background rectangle
             overlay_id = self.canvas.create_rectangle(
@@ -103,7 +107,7 @@ class MenuManager:
             
             # Title
             title = self.canvas.create_text(
-                WIDTH // 2, overlay_y + 30,
+                overlay_x + overlay_width // 2, overlay_y + 30,
                 text='CHOOSE AN UPGRADE',
                 fill='lime',
                 font=('Arial', 24, 'bold')
@@ -135,7 +139,7 @@ class MenuManager:
                 
                 # Button text
                 text_id = self.canvas.create_text(
-                    WIDTH // 2, btn_y + button_height // 2,
+                    overlay_x + overlay_width // 2, btn_y + button_height // 2,
                     text=upgrade_name,
                     fill='lime',
                     font=('Arial', 16)
@@ -183,12 +187,16 @@ class MenuManager:
         """Display pause menu overlay on the game canvas."""
         self.game.paused = True
         
-        # Create square overlay
-        menu_size = min(WIDTH, HEIGHT) // 2
-        overlay_x = (WIDTH - menu_size) // 2
-        overlay_y = (HEIGHT - menu_size) // 2
-        overlay_width = menu_size
-        overlay_height = menu_size
+        # Create overlay - use actual canvas dimensions
+        canvas_width = int(self.canvas.winfo_width())
+        canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.15)  # 15% of canvas width
+        # Height: title (30) + upgrades label (20) + upgrades text (20) + 6 buttons (40 each) + spacing (60*5) + padding (40) = 510
+        menu_height = 510
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+        overlay_width = menu_width
+        overlay_height = menu_height
         
         # Background rectangle
         self.pause_menu_id = self.canvas.create_rectangle(
@@ -202,7 +210,7 @@ class MenuManager:
         
         # Title
         title = self.canvas.create_text(
-            WIDTH // 2, overlay_y + 30,
+            overlay_x + overlay_width // 2, overlay_y + 30,
             text='PAUSED',
             fill='yellow',
             font=('Arial', 32, 'bold')
@@ -211,7 +219,7 @@ class MenuManager:
         
         # Upgrades panel
         upgrades_label = self.canvas.create_text(
-            WIDTH // 2, overlay_y + 70,
+            overlay_x + overlay_width // 2, overlay_y + 70,
             text='Active Upgrades:',
             fill='cyan',
             font=('Arial', 14, 'bold')
@@ -239,7 +247,7 @@ class MenuManager:
             upgrades_text = 'None'
         
         upgrades_display = self.canvas.create_text(
-            WIDTH // 2, overlay_y + 90,
+            overlay_x + overlay_width // 2, overlay_y + 90,
             text=upgrades_text,
             fill='lime',
             font=('Arial', 12)
@@ -254,7 +262,7 @@ class MenuManager:
             fill='green', outline='white', width=2
         )
         resume_text = self.canvas.create_text(
-            WIDTH // 2, resume_btn_y + 20,
+            overlay_x + overlay_width // 2, resume_btn_y + 20,
             text='Resume',
             fill='white',
             font=('Arial', 16)
@@ -270,7 +278,7 @@ class MenuManager:
             fill='orange', outline='white', width=2
         )
         restart_text = self.canvas.create_text(
-            WIDTH // 2, restart_btn_y + 20,
+            overlay_x + overlay_width // 2, restart_btn_y + 20,
             text='Restart',
             fill='white',
             font=('Arial', 16)
@@ -286,7 +294,7 @@ class MenuManager:
             fill='red', outline='white', width=2
         )
         quit_text = self.canvas.create_text(
-            WIDTH // 2, quit_btn_y + 20,
+            overlay_x + overlay_width // 2, quit_btn_y + 20,
             text='Quit',
             fill='white',
             font=('Arial', 16)
@@ -303,7 +311,7 @@ class MenuManager:
             fill='#4a4a7a', outline='white', width=2
         )
         sound_text = self.canvas.create_text(
-            WIDTH // 2, sound_btn_y + 20,
+            overlay_x + overlay_width // 2, sound_btn_y + 20,
             text=f'Sound: {sound_status}',
             fill='white',
             font=('Arial', 16)
@@ -320,7 +328,7 @@ class MenuManager:
             fill='#7a4a4a', outline='white', width=2
         )
         music_text = self.canvas.create_text(
-            WIDTH // 2, music_btn_y + 20,
+            overlay_x + overlay_width // 2, music_btn_y + 20,
             text=f'Music: {music_status}',
             fill='white',
             font=('Arial', 16)
@@ -337,7 +345,7 @@ class MenuManager:
             fill='#7a4a7a', outline='white', width=2
         )
         keyboard_text = self.canvas.create_text(
-            WIDTH // 2, keyboard_btn_y + 20,
+            overlay_x + overlay_width // 2, keyboard_btn_y + 20,
             text=f'Layout: {keyboard_layout_display}',
             fill='white',
             font=('Arial', 16)
@@ -413,12 +421,16 @@ class MenuManager:
         """Display the developer testing menu."""
         self.dev_menu_active = True
         
-        # Create overlay
-        menu_size = min(WIDTH, HEIGHT) * 0.6
-        overlay_x = (WIDTH - menu_size) // 2
-        overlay_y = (HEIGHT - menu_size) // 2
-        overlay_width = menu_size
-        overlay_height = menu_size
+        # Create overlay - use actual canvas dimensions
+        canvas_width = int(self.canvas.winfo_width())
+        canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.2)  # 20% of canvas width
+        # Height: title (20) + 11 buttons (35 each) + spacing (5*11) + padding (40) = 505
+        menu_height = 505
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+        overlay_width = menu_width
+        overlay_height = menu_height
         
         # Background rectangle
         overlay_id = self.canvas.create_rectangle(
@@ -430,7 +442,7 @@ class MenuManager:
         
         # Title
         title = self.canvas.create_text(
-            WIDTH // 2, overlay_y + 20,
+            overlay_x + overlay_width // 2, overlay_y + 20,
             text='DEV TESTING MENU',
             fill='magenta',
             font=('Arial', 20, 'bold')
@@ -474,7 +486,7 @@ class MenuManager:
             self.dev_menu_elements.append(btn_id)
             
             text_id = self.canvas.create_text(
-                WIDTH // 2, btn_y1 + button_height // 2,
+                overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
                 text=label,
                 fill='white',
                 font=('Arial', 12)
