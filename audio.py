@@ -41,8 +41,8 @@ class AudioManager:
         self._last_sound_time: Dict[str, float] = {}  # Track when each sound was last played
         self._music_thread: Optional[threading.Thread] = None
         self._music_stop_event: Optional[threading.Event] = None
-        self.sound_enabled: bool = True
-        self.music_enabled: bool = True
+        self.sound_enabled: bool = False  # Muted
+        self.music_enabled: bool = False  # Muted
     
     def play_sound_async(self, sound_name: str, frequency: Optional[int] = None, 
                         duration: Optional[int] = None) -> None:
