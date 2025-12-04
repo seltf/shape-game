@@ -440,7 +440,7 @@ class Game:
     def on_key_press(self, event):
         """Handle key press events for movement and actions."""
         # Check for special keys FIRST (before movement keys)
-        if event.keysym == 'e':  # E key (toggle auto-fire)
+        if event.keysym == 'space':  # Spacebar (toggle auto-fire)
             self.auto_fire_enabled = not self.auto_fire_enabled
             print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
             return

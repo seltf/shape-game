@@ -239,13 +239,13 @@ update() called
 
 **Combat Controls**
 - **Mouse Click / Left Button**: Fire projectile toward mouse cursor
-- **E Key (QWERTY) / Physical position-based**: Toggle auto-fire on/off
+- **Spacebar**: Toggle auto-fire on/off
 
 **System Controls**
 - **Escape**: Open/close pause menu
 
 **Auto-Fire Feature**
-- Pressing E toggles auto-fire mode on/off
+- Pressing Spacebar toggles auto-fire mode on/off
 - When enabled, projectiles fire automatically every 500ms
 - Auto-fire respects normal firing rules:
   - Cannot fire while paused or upgrade menu is open
