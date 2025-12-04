@@ -203,7 +203,7 @@ PROJECTILE_SPLIT_ANGLE = 30  # Degrees to split projectiles on each bounce
 PROJECTILE_LIFETIME = 10000  # Milliseconds before projectile explodes
 EXPLOSION_RADIUS = 100  # Pixels for explosion damage radius
 
-WEAPON_STATS = {'projectile_speed': 16, 'homing': 0, 'bounces': 0, 'splits': True, 'shrapnel': 0}
+WEAPON_STATS = {'projectile_speed': 16, 'homing': 0, 'bounces': 0, 'splits': True, 'shrapnel': 0, 'shield': 0}
 
 # Weapon upgrades - modifiers that can be applied to base weapon
 WEAPON_UPGRADES = {
@@ -212,6 +212,7 @@ WEAPON_UPGRADES = {
     'speed_boost': {'projectile_speed': 3, 'name': 'Speed Boost'},
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
+    'shield': {'shield': 1, 'name': 'Shield'},
 }
 
 # Linked upgrades - only appear if prerequisite(s) are owned
@@ -229,8 +230,8 @@ LINKED_UPGRADES = {
 }
 
 PLAYER_ACCELERATION = 3.5  # How quickly player accelerates
-PLAYER_MAX_SPEED = 22  # Maximum player speed
-PLAYER_FRICTION = 0.80  # Friction multiplier (0-1, lower = more friction)
+PLAYER_MAX_SPEED = 6  # Maximum player speed (barely faster than circles at 5)
+PLAYER_FRICTION = 0.70  # Friction multiplier (0-1, lower = more friction)
 
 # Black hole upgrade constants (now a weapon upgrade, not ability)
 BLACK_HOLE_TRIGGER_CHANCE = 0.15  # 15% chance per hit at level 1
@@ -240,7 +241,7 @@ BLACK_HOLE_PULL_DURATION = 3000  # Milliseconds that black hole pulls enemies (3
 BLACK_HOLE_PULL_STRENGTH_MIN = 5  # Minimum pull strength at radius edge to prevent getting stuck
 
 # Ability constants (no longer used for black hole, keeping for future abilities)
-ABILITY_COOLDOWN = 5000  # Milliseconds between ability uses (5 seconds)
+
 
 class BlackHole:
     """
@@ -489,19 +490,24 @@ class Player:
         self.vx = 0  # Velocity x
         self.vy = 0  # Velocity y
         self.health = 1  # Player starts with 1 HP
+        self.shield_active = False  # Whether shield is currently up
+        self.shield_cooldown = 0  # Cooldown counter in milliseconds
+        self.shield_rings = []  # List of canvas objects for shield rings (multiple rings for levels)
+        self.shield_level = 0  # Current shield level (0-3)
         self.rect = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
 
-    def move(self, accel_x, accel_y):
+    def move(self, accel_x, accel_y, speed_boost=0):
         """Apply acceleration to player velocity and update position."""
         # Apply acceleration
         self.vx += accel_x * PLAYER_ACCELERATION
         self.vy += accel_y * PLAYER_ACCELERATION
         
-        # Clamp velocity to max speed
+        # Clamp velocity to max speed (including speed boost from upgrades)
+        max_speed = PLAYER_MAX_SPEED + speed_boost
         speed = math.hypot(self.vx, self.vy)
-        if speed > PLAYER_MAX_SPEED:
-            self.vx = (self.vx / speed) * PLAYER_MAX_SPEED
-            self.vy = (self.vy / speed) * PLAYER_MAX_SPEED
+        if speed > max_speed:
+            self.vx = (self.vx / speed) * max_speed
+            self.vy = (self.vy / speed) * max_speed
         
         # Apply friction
         self.vx *= PLAYER_FRICTION
@@ -511,10 +517,90 @@ class Player:
         self.x = max(self.size//2, min(WIDTH-self.size//2, self.x+self.vx))
         self.y = max(self.size//2, min(HEIGHT-self.size//2, self.y+self.vy))
         self.canvas.coords(self.rect, self.x-self.size//2, self.y-self.size//2, self.x+self.size//2, self.y+self.size//2)
+        
+        # Update shield ring position if active
+        # Update shield rings if active
+        if self.shield_rings:
+            for i, ring in enumerate(self.shield_rings):
+                if ring is not None:
+                    # Each ring is offset further out
+                    shield_radius = self.size // 2 + 15 + (i * 12)
+                    self.canvas.coords(ring, 
+                                      self.x - shield_radius, self.y - shield_radius,
+                                      self.x + shield_radius, self.y + shield_radius)
 
     def get_center(self):
         """Return the center coordinates of the player circle."""
         return self.x, self.y
+
+    def activate_shield(self):
+        """Activate the shield rings around the player based on shield level."""
+        if not self.shield_active:
+            self.shield_active = True
+            self.shield_cooldown = 0
+            # Create rings based on shield level
+            self.shield_rings = []
+            for i in range(self.shield_level):
+                shield_radius = self.size // 2 + 15 + (i * 12)
+                ring = self.canvas.create_oval(
+                    self.x - shield_radius, self.y - shield_radius,
+                    self.x + shield_radius, self.y + shield_radius,
+                    outline='cyan', width=2
+                )
+                self.shield_rings.append(ring)
+
+    def deactivate_shield(self, enemy=None):
+        """Remove one shield ring and push back nearby enemies. Start cooldown if all rings destroyed."""
+        try:
+            # Remove one ring from the display
+            if self.shield_rings:
+                ring = self.shield_rings.pop()
+                if ring is not None:
+                    self.canvas.delete(ring)
+            
+            # If no rings left, start cooldown
+            if not self.shield_rings:
+                self.shield_active = False
+                self.shield_cooldown = 5000  # 5 seconds in milliseconds
+            
+            # Push back all nearby enemies in a radius
+            push_radius = 150  # Radius to affect enemies
+            px, py = self.get_center()
+            
+            # Find the game instance to access all enemies
+            # The game instance is passed when deactivate_shield is called from check_player_collision
+            # We'll need to pass the game instance or access enemies differently
+            # For now, store reference to game in player during init
+            if hasattr(self, 'game'):
+                for nearby_enemy in self.game.enemies:
+                    try:
+                        ex, ey = nearby_enemy.get_position()
+                        ex_center = ex + nearby_enemy.size // 2
+                        ey_center = ey + nearby_enemy.size // 2
+                        
+                        # Calculate distance to this enemy
+                        dx = ex_center - px
+                        dy = ey_center - py
+                        dist = math.hypot(dx, dy)
+                        
+                        # If enemy is within push radius, push it back
+                        if dist < push_radius and dist > 0:
+                            push_force = 2.5  # Pushback speed per frame
+                            nearby_enemy.being_pushed = True
+                            nearby_enemy.push_velocity_x = (dx / dist) * push_force
+                            nearby_enemy.push_velocity_y = (dy / dist) * push_force
+                            nearby_enemy.push_timer = 16  # Push for 16 frames (~0.8 seconds)
+                    except Exception as e:
+                        print(f"[ERROR] Failed to push enemy: {e}")
+        except Exception as e:
+            print(f"[ERROR] Shield deactivation failed: {e}")
+
+    def update_shield(self, dt_ms):
+        """Update shield cooldown (dt_ms is delta time in milliseconds)."""
+        if not self.shield_active and self.shield_cooldown > 0:
+            self.shield_cooldown -= dt_ms
+            if self.shield_cooldown <= 0:
+                self.activate_shield()
 
 class Enemy:
     """
@@ -531,12 +617,24 @@ class Enemy:
         self.pull_velocity_x = 0  # Pull force direction X
         self.pull_velocity_y = 0  # Pull force direction Y
         self.pull_timer = 0  # Frames remaining to be pulled
+        self.being_pushed = False  # Whether currently pushed by shield
+        self.push_velocity_x = 0  # Push force direction X
+        self.push_velocity_y = 0  # Push force direction Y
+        self.push_timer = 0  # Frames remaining to be pushed
+        self.shield_immunity = 0  # Frames of immunity after shield hit
         self.rect = self.canvas.create_rectangle(x, y, x+size, y+size, fill='red')
 
     def move_towards(self, target_x, target_y, speed=5):
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -573,6 +671,11 @@ class TriangleEnemy:
         self.pull_velocity_x = 0  # Pull force direction X
         self.pull_velocity_y = 0  # Pull force direction Y
         self.pull_timer = 0  # Frames remaining to be pulled
+        self.being_pushed = False  # Whether currently pushed by shield
+        self.push_velocity_x = 0  # Push force direction X
+        self.push_velocity_y = 0  # Push force direction Y
+        self.push_timer = 0  # Frames remaining to be pushed
+        self.shield_immunity = 0  # Frames of immunity after shield hit
         # Draw triangle using create_polygon
         # Triangle points: top center, bottom-left, bottom-right
         self.points = [
@@ -633,6 +736,11 @@ class PentagonEnemy:
         self.pull_velocity_x = 0  # Pull force direction X
         self.pull_velocity_y = 0  # Pull force direction Y
         self.pull_timer = 0  # Frames remaining to be pulled
+        self.being_pushed = False  # Whether currently pushed by shield
+        self.push_velocity_x = 0  # Push force direction X
+        self.push_velocity_y = 0  # Push force direction Y
+        self.push_timer = 0  # Frames remaining to be pushed
+        self.shield_immunity = 0  # Frames of immunity after shield hit
         # Draw pentagon using create_polygon
         self.points = self._calculate_pentagon_points(x, y, size)
         self.rect = self.canvas.create_polygon(*self.points, fill='purple')
@@ -1332,6 +1440,8 @@ class Game:
         self.score = 0
         self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
         self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
+        self.player.game = self  # Give player reference to game instance for shield pushback
+        
         self.enemies = []
         self.particles = []
         self.shards = []  # Track shrapnel shards
@@ -1341,6 +1451,10 @@ class Game:
         self.last_dash_dy = 0
         self.active_upgrades = []  # List of active upgrade keys
         self.computed_weapon_stats = self.compute_weapon_stats()  # Cache computed stats
+        
+        # Activate initial shield if shield upgrade is owned
+        self._update_player_shield()
+        
         self.dash_cooldown_counter = 0
         self.last_move_dx = 1  # Track last movement direction
         self.last_move_dy = 0
@@ -1351,9 +1465,7 @@ class Game:
         self.xp_text = self.canvas.create_text(WIDTH//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
 
         # Ability system
-        self.abilities = []  # List of active abilities being cast
-        self.ability_cooldown_counter = 0  # Cooldown counter for abilities
-        self.current_ability = 'black_hole'  # Current active ability
+
         self.black_holes = []  # List of active black holes from weapon upgrades
         
         self.upgrade_menu_active = False  # Whether upgrade menu is displayed
@@ -1365,7 +1477,8 @@ class Game:
         self.root.bind('<KeyPress>', self.on_key_press)
         self.root.bind('<KeyRelease>', self.on_key_release)
         self.canvas.bind('<Button-1>', self.on_canvas_click)
-        self.root.bind('<space>', self.on_ability_activate)
+        self.root.bind('<FocusOut>', self.on_window_focus_out)
+        self.root.bind('<FocusIn>', self.on_window_focus_in)
         self.pressed_keys = set()
         self.paused = False
         self.pause_menu_id = None  # Track pause menu rectangle
@@ -1433,7 +1546,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole']:
+                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -1458,11 +1571,17 @@ class Game:
 
     def add_upgrade(self, upgrade_key):
         """Add an upgrade to active upgrades and recompute stats."""
-        if upgrade_key not in WEAPON_UPGRADES and upgrade_key not in LINKED_UPGRADES:
+        try:
+            if upgrade_key not in WEAPON_UPGRADES and upgrade_key not in LINKED_UPGRADES:
+                return False
+            self.active_upgrades.append(upgrade_key)
+            self.computed_weapon_stats = self.compute_weapon_stats()
+            # Only update player shield if a shield-related upgrade was picked
+            if upgrade_key == 'shield':
+                self._update_player_shield()
+            return True
+        except Exception as e:
             return False
-        self.active_upgrades.append(upgrade_key)
-        self.computed_weapon_stats = self.compute_weapon_stats()
-        return True
     
     def remove_upgrade(self, upgrade_key):
         """Remove an upgrade from active upgrades and recompute stats."""
@@ -1591,44 +1710,121 @@ class Game:
 
     def on_canvas_click(self, event):
         """Handle canvas clicks - routes to upgrade menu or pause menu or dev menu or attack."""
-        print(f"[INPUT] Canvas clicked at ({event.x}, {event.y})")
-        
-        # If game over screen is showing, handle restart button click
-        if self.game_over_active:
-            if self.game_over_restart_btn is not None:
-                coords = self.canvas.coords(self.game_over_restart_btn)
-                if coords and len(coords) >= 4:
-                    x1, y1, x2, y2 = coords
-                    if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-                        self.restart_game()
-                        return
-            return  # Click outside button does nothing
-        
-        # If dev menu is open, handle dev button clicks
-        if self.dev_menu_active:
-            for action, btn_id in self.dev_buttons.items():
-                coords = self.canvas.coords(btn_id)
-                if coords and len(coords) >= 4:
-                    x1, y1, x2, y2 = coords
-                    if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-                        self._handle_dev_menu_action(action)
-                        return
-            return  # Click outside buttons in dev menu does nothing
-        
-        # If upgrade menu is open, handle upgrade button clicks
-        if self.upgrade_menu_active:
-            if not self.upgrade_menu_clickable:
-                return  # Upgrade menu not ready for clicks yet
-            for upgrade_key, btn_id in self.upgrade_buttons.items():
-                coords = self.canvas.coords(btn_id)
-                if coords and len(coords) >= 4 and (coords[0] <= event.x <= coords[2] and coords[1] <= event.y <= coords[3]):
-                    self.on_upgrade_selection(upgrade_key)
-                    return
-            return  # Click outside buttons in upgrade menu does nothing
+        try:
+            import sys
+            sys.stdout.write(f"[INPUT] Canvas clicked at ({event.x}, {event.y})\n")
+            sys.stdout.flush()
+            
+            # If game over screen is showing, handle restart button click
+            sys.stdout.write(f"[DEBUG] Checking game_over_active: {self.game_over_active}\n")
+            sys.stdout.flush()
+            if self.game_over_active:
+                if self.game_over_restart_btn is not None:
+                    coords = self.canvas.coords(self.game_over_restart_btn)
+                    if coords and len(coords) >= 4:
+                        x1, y1, x2, y2 = coords
+                        if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                            self.restart_game()
+                            return
+                return  # Click outside button does nothing
+            
+            # If dev menu is open, handle dev button clicks
+            sys.stdout.write(f"[DEBUG] Checking dev_menu_active: {self.dev_menu_active}\n")
+            sys.stdout.flush()
+            if self.dev_menu_active:
+                # Create a list of items to avoid dict changing during iteration
+                dev_buttons_copy = list(self.dev_buttons.items())
+                for action, btn_id in dev_buttons_copy:
+                    coords = self.canvas.coords(btn_id)
+                    if coords and len(coords) >= 4:
+                        x1, y1, x2, y2 = coords
+                        if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                            self._handle_dev_menu_action(action)
+                            return
+                return  # Click outside buttons in dev menu does nothing
+            
+            # If upgrade menu is open, handle upgrade button clicks
+            sys.stdout.write(f"[DEBUG] Checking upgrade_menu_active: {self.upgrade_menu_active}\n")
+            sys.stdout.flush()
+            if self.upgrade_menu_active:
+                sys.stdout.write(f"[DEBUG] Checking upgrade_menu_clickable: {self.upgrade_menu_clickable}\n")
+                sys.stdout.flush()
+                if not self.upgrade_menu_clickable:
+                    return  # Upgrade menu not ready for clicks yet
+                # Create a list of items to avoid dict changing during iteration
+                sys.stdout.write(f"[DEBUG] Creating upgrade_buttons_copy from {len(self.upgrade_buttons)} buttons\n")
+                sys.stdout.flush()
+                upgrade_buttons_copy = list(self.upgrade_buttons.items())
+                sys.stdout.write(f"[DEBUG] upgrade_buttons_copy has {len(upgrade_buttons_copy)} items\n")
+                sys.stdout.flush()
+                try:
+                    for upgrade_key, btn_id in upgrade_buttons_copy:
+                        sys.stdout.write(f"[DEBUG] Checking upgrade button: {upgrade_key}\n")
+                        sys.stdout.flush()
+                        try:
+                            coords = self.canvas.coords(btn_id)
+                            sys.stdout.write(f"[DEBUG] Got coords for {upgrade_key}: {coords}\n")
+                            sys.stdout.flush()
+                            if coords and len(coords) >= 4 and (coords[0] <= event.x <= coords[2] and coords[1] <= event.y <= coords[3]):
+                                sys.stdout.write(f"[DEBUG] Click is on button {upgrade_key}, calling on_upgrade_selection\n")
+                                sys.stdout.flush()
+                                self.on_upgrade_selection(upgrade_key)
+                                return
+                        except Exception as e:
+                            sys.stdout.write(f"[ERROR] Error checking button {upgrade_key}: {e}\n")
+                            sys.stdout.flush()
+                            import traceback
+                            traceback.print_exc()
+                except Exception as e:
+                    sys.stdout.write(f"[ERROR] Error in upgrade button iteration: {e}\n")
+                    sys.stdout.flush()
+                    import traceback
+                    traceback.print_exc()
+                sys.stdout.write(f"[DEBUG] No upgrade button matched click, returning\n")
+                sys.stdout.flush()
+                return  # Click outside buttons in upgrade menu does nothing
+            
+            # If pause menu is open, handle pause button clicks
+            if self.paused:
+                # Create a list of items to avoid dict changing during iteration
+                pause_buttons_copy = list(self.pause_buttons.items())
+                for action, btn_id in pause_buttons_copy:
+                    coords = self.canvas.coords(btn_id)
+                    if coords and len(coords) >= 4:
+                        x1, y1, x2, y2 = coords
+                        if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                            if action == 'resume':
+                                self.hide_pause_menu()
+                            elif action == 'restart':
+                                self.restart_game()
+                            elif action == 'quit':
+                                self.quit_game()
+                            elif action == 'sound':
+                                self.toggle_sound()
+                            elif action == 'music':
+                                self.toggle_music()
+                            elif action == 'keyboard':
+                                self.toggle_keyboard_layout()
+                            elif action == 'dev':
+                                self.show_dev_menu()
+                            return
+                return  # Click outside buttons in pause menu does nothing
+            
+            # Otherwise, attack
+            self.attack()
+        except Exception as e:
+            import sys
+            sys.stdout.write(f"[ERROR] FATAL ERROR IN CLICK HANDLER: {e}\n")
+            sys.stdout.flush()
+            import traceback
+            traceback.print_exc()
+            sys.stdout.flush()
         
         # If pause menu is open, handle pause button clicks
         if self.paused:
-            for action, btn_id in self.pause_buttons.items():
+            # Create a list of items to avoid dict changing during iteration
+            pause_buttons_copy = list(self.pause_buttons.items())
+            for action, btn_id in pause_buttons_copy:
                 coords = self.canvas.coords(btn_id)
                 if coords and len(coords) >= 4:
                     x1, y1, x2, y2 = coords
@@ -1667,6 +1863,11 @@ class Game:
                 u for u in available_upgrades 
                 if not (WEAPON_UPGRADES[u].get('one_time', False) and u in self.active_upgrades)
             ]
+            
+            # Remove shield upgrade if it's already maxed at level 3
+            shield_level = self.computed_weapon_stats.get('shield', 0)
+            if shield_level >= 3:
+                available_upgrades = [u for u in available_upgrades if u != 'shield']
             
             # Add linked upgrades if prerequisites are met
             for linked_key, linked_data in LINKED_UPGRADES.items():
@@ -1763,21 +1964,32 @@ class Game:
     
     def on_upgrade_selection(self, upgrade_key):
         """Handle upgrade selection."""
-        if upgrade_key in self.upgrade_choices:
-            self.add_upgrade(upgrade_key)
-            self.close_upgrade_menu()
+        try:
+            if upgrade_key in self.upgrade_choices:
+                self.add_upgrade(upgrade_key)
+                self.close_upgrade_menu()
+        except Exception as e:
+            # Ensure menu is closed even on error
+            self.upgrade_menu_active = False
+            self.paused = False
     
     def close_upgrade_menu(self):
         """Close the upgrade menu."""
-        for element_id in self.upgrade_menu_elements:
-            self.canvas.delete(element_id)
-        
-        self.upgrade_menu_elements = []
-        self.upgrade_buttons = {}
-        self.upgrade_choices = []
         self.upgrade_menu_active = False
         self.upgrade_menu_clickable = False
         self.paused = False
+        
+        # Delete canvas elements
+        for element_id in self.upgrade_menu_elements:
+            try:
+                self.canvas.delete(element_id)
+            except tk.TclError:
+                pass  # Element already deleted or invalid
+        
+        # Clear all references
+        self.upgrade_menu_elements = []
+        self.upgrade_buttons = {}
+        self.upgrade_choices = []
 
     def show_pause_menu(self):
         """Display pause menu overlay on the game canvas."""
@@ -2026,6 +2238,7 @@ class Game:
             ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
             ('Add Black Hole', 'upgrade_black_hole', '#4a4a8a'),
             ('Add Homing', 'upgrade_homing', '#4a4a8a'),
+            ('Add Shield', 'upgrade_shield', '#4a4a8a'),
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
             ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
@@ -2076,6 +2289,8 @@ class Game:
                 self.add_upgrade('black_hole')
             elif action == 'upgrade_homing':
                 self.add_upgrade('homing')
+            elif action == 'upgrade_shield':
+                self.add_upgrade('shield')
             elif action == 'level_up':
                 self.level += 1
                 self.xp_for_next_level = int(self.xp_for_next_level * 1.35)
@@ -2160,38 +2375,57 @@ class Game:
             self.hide_pause_menu()
         self.game_over_active = False  # Clear game over flag
         self.canvas.delete('all')
+        
+        # Redraw starfield background
+        self._draw_starfield()
+        
         self.score = 0
         self.game_time_ms = 0
         self.dash_cooldown_counter = 0
-        self.ability_cooldown_counter = 0
         self.particles.clear()
         self.shards.clear()
         self.projectiles.clear()
-        self.abilities.clear()
+        self.black_holes.clear()  # Also clear black holes
         self.active_upgrades = []
         self.computed_weapon_stats = self.compute_weapon_stats()
         self.xp = 0
         self.level = 0
         self.xp_for_next_level = 10
         self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
+        self.player.game = self  # Give player reference to game instance for shield pushback
         self.enemies = []
         self.spawn_enemies()
         self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
         self.level_text = self.canvas.create_text(WIDTH//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
         self.xp_text = self.canvas.create_text(WIDTH//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
+        
+        # Restart background music
+        start_background_music(self)
 
     def on_key_press(self, event):
         """Handle key press events for movement and actions."""
-        # Get the movement keys based on current keyboard layout
-        if self.keyboard_layout == 'dvorak':
-            # Dvorak controls: ',' = up, 'a' = left, 'o' = down, 'e' = right
-            movement_keys = [',', 'a', 'o', 'e']
-        else:  # QWERTY
-            # QWERTY controls: 'w' = up, 'a' = left, 's' = down, 'd' = right
-            movement_keys = ['w', 'a', 's', 'd']
+        # Use keysyms for layout-independent controls
+        # Map keysyms to directions - supports arrow keys, WASD, and Dvorak
+        keysym_map = {
+            # Arrow keys (universal)
+            'Up': 'up',
+            'Down': 'down',
+            'Left': 'left',
+            'Right': 'right',
+            # QWERTY
+            'w': 'up',
+            's': 'down',
+            'a': 'left',
+            'd': 'right',
+            # Dvorak (physical key positions map to WASD positions)
+            'comma': 'up',      # Dvorak ',' key is where WASD 'w' is
+            'a': 'left',        # Dvorak 'a' is same position as QWERTY
+            'o': 'down',        # Dvorak 'o' key is where WASD 's' is
+            'e': 'right',       # Dvorak 'e' key is where WASD 'd' is
+        }
         
-        if event.char in movement_keys:
-            self.pressed_keys.add(event.char)
+        if event.keysym in keysym_map:
+            self.pressed_keys.add(keysym_map[event.keysym])
         elif event.keysym == 'Escape':
             # If dev menu is open, close it
             if self.dev_menu_active:
@@ -2205,30 +2439,37 @@ class Game:
 
     def on_key_release(self, event):
         """Handle key release events for movement."""
-        # Get the movement keys based on current keyboard layout
-        if self.keyboard_layout == 'dvorak':
-            movement_keys = [',', 'a', 'o', 'e']
-        else:  # QWERTY
-            movement_keys = ['w', 'a', 's', 'd']
+        # Use keysyms for layout-independent controls
+        keysym_map = {
+            # Arrow keys (universal)
+            'Up': 'up',
+            'Down': 'down',
+            'Left': 'left',
+            'Right': 'right',
+            # QWERTY
+            'w': 'up',
+            's': 'down',
+            'a': 'left',
+            'd': 'right',
+            # Dvorak (physical key positions map to WASD positions)
+            'comma': 'up',      # Dvorak ',' key is where WASD 'w' is
+            'a': 'left',        # Dvorak 'a' is same position as QWERTY
+            'o': 'down',        # Dvorak 'o' key is where WASD 's' is
+            'e': 'right',       # Dvorak 'e' key is where WASD 'd' is
+        }
         
-        if event.char in movement_keys:
-            self.pressed_keys.discard(event.char)
+        if event.keysym in keysym_map:
+            self.pressed_keys.discard(keysym_map[event.keysym])
     
-    def on_ability_activate(self, event):
-        """Handle active ability activation."""
-        if self.ability_cooldown_counter > 0:
-            return  # Ability is on cooldown
-        
-        # Cast the current ability
-        if self.current_ability == 'black_hole':
-            self.cast_black_hole()
-        
-        self.ability_cooldown_counter = ABILITY_COOLDOWN
-    
-    def cast_black_hole(self):
-        """Black hole is now a weapon upgrade, not an ability. This method is deprecated."""
-        # Black hole effects are now spawned through weapon hits with the black hole upgrade
-        # This ability method is kept for future alternative ability implementations
+
+
+    def on_window_focus_out(self, event):
+        """Pause game when window loses focus."""
+        if not self.paused and not self.game_over_active:
+            self.show_pause_menu()
+
+    def on_window_focus_in(self, event):
+        """Optional: could resume game when window regains focus, but keeping paused is safer."""
         pass
 
     def update(self):
@@ -2237,39 +2478,40 @@ class Game:
             self.root.after(50, self.update)
             return
         
-        # Track time played
-        self.game_time_ms += 50
+        try:
+            # Track time played
+            self.game_time_ms += 50
+            
+            self.handle_player_movement()
+            self.move_enemies()
+            self.check_player_collision()  # Check if enemies hit player
+            self.update_particles()
+            self.update_shards()
+            self.update_projectiles()
+            self.update_black_holes()
+            self.update_ammo_orbs()
+            self.update_dash_cooldown()
+            self.update_shield_cooldown()
+        except Exception as e:
+            sys.stdout.write(f"[UPDATE ERROR] Uncaught exception in update loop: {e}\n")
+            import traceback
+            sys.stdout.write(traceback.format_exc())
+            sys.stdout.flush()
         
-        self.handle_player_movement()
-        self.move_enemies()
-        self.check_player_collision()  # Check if enemies hit player
-        self.update_particles()
-        self.update_shards()
-        self.update_projectiles()
-        self.update_abilities()
-        self.update_black_holes()
-        self.update_ammo_orbs()
-        self.update_dash_cooldown()
-        self.update_ability_cooldown()
         self.root.after(50, self.update)
 
     def handle_player_movement(self):
         """Check pressed keys and apply acceleration accordingly."""
         accel_x, accel_y = 0, 0
         
-        # Get movement keys based on current keyboard layout
-        if self.keyboard_layout == 'dvorak':
-            up_key, left_key, down_key, right_key = ',', 'a', 'o', 'e'
-        else:  # QWERTY
-            up_key, left_key, down_key, right_key = 'w', 'a', 's', 'd'
-        
-        if up_key in self.pressed_keys:
+        # Check direction keys (now layout-independent)
+        if 'up' in self.pressed_keys:
             accel_y -= 1
-        if down_key in self.pressed_keys:
+        if 'down' in self.pressed_keys:
             accel_y += 1
-        if left_key in self.pressed_keys:
+        if 'left' in self.pressed_keys:
             accel_x -= 1
-        if right_key in self.pressed_keys:
+        if 'right' in self.pressed_keys:
             accel_x += 1
         
         # Always apply movement (even if accel is 0, friction will slow player)
@@ -2283,7 +2525,7 @@ class Game:
 
     def move_player(self, dx, dy):
         """Move the player by (dx, dy)."""
-        self.player.move(dx, dy)
+        self.player.move(dx, dy, 0)
 
     def create_death_poof(self, x, y):
         """Create a poof particle effect at (x, y)."""
@@ -2374,16 +2616,6 @@ class Game:
                 p.cleanup()
         self.projectiles = alive_projectiles
 
-    def update_abilities(self):
-        """Update all active abilities and remove dead ones."""
-        alive_abilities = []
-        for ability in self.abilities:
-            if ability.update():
-                alive_abilities.append(ability)
-            else:
-                ability.cleanup()
-        self.abilities = alive_abilities
-
     def update_black_holes(self):
         """Update all active black holes from weapon upgrades and remove expired ones."""
         alive_black_holes = []
@@ -2399,10 +2631,43 @@ class Game:
         if self.dash_cooldown_counter > 0:
             self.dash_cooldown_counter -= 50
     
-    def update_ability_cooldown(self):
-        """Update ability cooldown timer."""
-        if self.ability_cooldown_counter > 0:
-            self.ability_cooldown_counter -= 50
+    def _update_player_shield(self):
+        """Update player shield based on shield upgrade."""
+        shield_level = self.computed_weapon_stats.get('shield', 0)
+        shield_level = min(shield_level, 3)  # Cap at level 3
+        
+        if shield_level > 0:
+            # Update player's shield level
+            old_level = self.player.shield_level
+            self.player.shield_level = shield_level
+            
+            # If shield level changed and shield is active, recreate the rings
+            if self.player.shield_active and old_level != shield_level:
+                # Delete old rings
+                for ring in self.player.shield_rings:
+                    if ring is not None:
+                        self.canvas.delete(ring)
+                # Create new rings with updated level
+                self.player.shield_rings = []
+                for i in range(self.player.shield_level):
+                    shield_radius = self.player.size // 2 + 15 + (i * 12)
+                    ring = self.canvas.create_oval(
+                        self.player.x - shield_radius, self.player.y - shield_radius,
+                        self.player.x + shield_radius, self.player.y + shield_radius,
+                        outline='cyan', width=2
+                    )
+                    self.player.shield_rings.append(ring)
+            elif not self.player.shield_active:
+                # Activate shield if not already active
+                self.player.activate_shield()
+
+    def update_shield_cooldown(self):
+        """Update shield cooldown timer."""
+        if self.player is not None:
+            shield_level = self.computed_weapon_stats.get('shield', 0)
+            if shield_level > 0:
+                # Update shield cooldown
+                self.player.update_shield(50)  # 50ms per frame
 
     def update_ammo_orbs(self):
         """Update ammo orbs to orbit around the player."""
@@ -2492,13 +2757,25 @@ class Game:
             dist_sq = dx * dx + dy * dy
             collision_dist_sq = (PLAYER_SIZE // 2 + ENEMY_SIZE // 2) ** 2
             
-            if dist_sq < collision_dist_sq:
-                # Collision detected - deal damage to player
-                print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")
-                self.player.health -= 1
-                if self.player.health <= 0:
-                    print(f"[ACTION] Player died!")
-                    self.game_over()
+            # Decrease immunity timer
+            if enemy.shield_immunity > 0:
+                enemy.shield_immunity -= 1
+            
+            if dist_sq < collision_dist_sq and enemy.shield_immunity <= 0:
+                # Collision detected
+                if self.player.shield_active and self.player.shield_rings:
+                    # Shield blocks the damage (only if there are rings)
+                    print(f"[ACTION] Shield blocked enemy hit! Rings remaining: {len(self.player.shield_rings)}")
+                    play_beep_async(1200, 50, self)  # Blip sound on shield hit
+                    self.player.deactivate_shield(enemy=enemy)
+                    enemy.shield_immunity = 10  # Prevent re-collision for 10 frames
+                else:
+                    # No shield - deal damage to player
+                    print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")
+                    self.player.health -= 1
+                    if self.player.health <= 0:
+                        print(f"[ACTION] Player died!")
+                        self.game_over()
                 return  # Only take damage once per frame
 
     def game_over(self):
