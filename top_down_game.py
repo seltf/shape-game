@@ -84,8 +84,8 @@ class Game:
         self.paused = False
         self.ammo_orbs = []  # Track ammo orb canvas items
         self.ammo_rotation = 0  # Angle for orbiting ammo orbs
-        self.sound_enabled = True  # Sound toggle setting
-        self.music_enabled = True  # Music toggle setting
+        self.sound_enabled = False  # Sound toggle setting
+        self.music_enabled = False  # Music toggle setting
         self.keyboard_layout = 'dvorak'  # 'dvorak' or 'qwerty'
         self.game_over_active = False  # Whether game over screen is showing
         self.game_over_restart_btn = None  # Reference to restart button
