@@ -721,18 +721,20 @@ class Projectile:
         self.is_mini_fork: bool = False  # Whether this is a mini-fork that can only chain once
         self.max_distance: float = stats.get('attack_range', 500)  # Maximum distance before returning
         self.distance_traveled: float = 0  # Track distance from spawn point
+        # Calculate timeout based on max distance and projectile speed
+        # At 50ms per frame: frames needed = max_distance / speed, timeout = frames * 50ms
+        self.timeout_ms: int = max(500, int((self.max_distance / self.speed) * 50 * 1.5))  # 1.5x safety multiplier
 
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
         # Track lifetime
         self.time_alive += 50  # Update is called every 50ms
         
-        # Check if max distance exceeded or 0.5 seconds have passed - trigger return
-        if not self.returning and self.time_alive >= 500:  # 500ms = 0.5 seconds
-            self.returning = True
-        
-        # Check if projectile has traveled beyond max range
+        # Check if projectile has traveled beyond max range first (distance check takes priority)
         if not self.returning and self.distance_traveled > self.max_distance:
+            self.returning = True
+        # If not already returning, check if time limit exceeded (scaled by distance)
+        elif not self.returning and self.time_alive >= self.timeout_ms:
             self.returning = True
         
         # Return animation
