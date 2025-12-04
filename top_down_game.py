@@ -12,6 +12,7 @@ from constants import *
 from audio import play_sound_async, play_beep_async, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, Particle, Shard, Projectile
 from menus import MenuManager
+from collision import CollisionDetector, PlayerCollisionHandler
 
 
 class Game:
@@ -1944,40 +1945,42 @@ class Game:
             else:  # CircleEnemy
                 enemy.move_towards(px, py, speed=5)  # Circles normal speed
 
-    def check_player_collision(self):
+    def check_player_collision(self) -> None:
         """Check if any enemy collides with player and deal damage."""
         px, py = self.player.get_center()
         for enemy in self.enemies:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
             
             # Check distance between player and enemy
-            dx = ex_center - px
-            dy = ey_center - py
-            dist_sq = dx * dx + dy * dy
-            collision_dist_sq = (PLAYER_SIZE // 2 + ENEMY_SIZE // 2) ** 2
+            if not CollisionDetector.check_player_enemy_collision(px, py, ex, ey):
+                # No collision, update immunity timer and continue
+                if enemy.shield_immunity > 0:
+                    enemy.shield_immunity -= 1
+                continue
             
             # Decrease immunity timer
             if enemy.shield_immunity > 0:
                 enemy.shield_immunity -= 1
             
-            if dist_sq < collision_dist_sq and enemy.shield_immunity <= 0:
-                # Collision detected
-                if self.player.shield_active and self.player.shield_rings:
-                    # Shield blocks the damage (only if there are rings)
-                    print(f"[ACTION] Shield blocked enemy hit! Rings remaining: {len(self.player.shield_rings)}")
-                    play_beep_async(1200, 50, self)  # Blip sound on shield hit
-                    self.player.deactivate_shield(enemy=enemy)
-                    enemy.shield_immunity = 10  # Prevent re-collision for 10 frames
-                else:
-                    # No shield - deal damage to player
-                    print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")
-                    self.player.health -= 1
-                    if self.player.health <= 0:
-                        print(f"[ACTION] Player died!")
-                        self.game_over()
-                return  # Only take damage once per frame
+            # Skip if enemy is currently immune
+            if enemy.shield_immunity > 0:
+                continue
+            
+            # Collision detected - handle it
+            if self.player.shield_active and self.player.shield_rings:
+                # Shield blocks the damage (only if there are rings)
+                print(f"[ACTION] Shield blocked enemy hit! Rings remaining: {len(self.player.shield_rings)}")
+                play_beep_async(1200, 50, self)  # Blip sound on shield hit
+                self.player.deactivate_shield(enemy=enemy)
+                enemy.shield_immunity = 10  # Prevent re-collision for 10 frames
+            else:
+                # No shield - deal damage to player
+                print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")
+                self.player.health -= 1
+                if self.player.health <= 0:
+                    print(f"[ACTION] Player died!")
+                    self.game_over()
+            return  # Only take damage once per frame
 
     def game_over(self):
         """Handle game over - show game over screen."""
