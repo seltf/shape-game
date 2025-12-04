@@ -439,6 +439,23 @@ class Game:
 
     def on_key_press(self, event):
         """Handle key press events for movement and actions."""
+        # Check for special keys FIRST (before movement keys)
+        if event.keysym == 'e':  # E key (toggle auto-fire)
+            self.auto_fire_enabled = not self.auto_fire_enabled
+            print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
+            return
+        elif event.keysym == 'Escape':
+            # If dev menu is open, close it
+            if self.menu_manager.dev_menu_active:
+                self.close_dev_menu()
+            # If pause menu is open, close it (resume game)
+            elif self.paused:
+                self.hide_pause_menu()
+            # Otherwise, open pause menu
+            else:
+                self.show_pause_menu()
+            return
+        
         # Use keysyms for layout-independent controls
         # Map keysyms to directions - supports arrow keys, WASD, and Dvorak
         keysym_map = {
@@ -461,19 +478,6 @@ class Game:
         
         if event.keysym in keysym_map:
             self.pressed_keys.add(keysym_map[event.keysym])
-        elif event.keysym == 'e':  # E key (toggle auto-fire)
-            self.auto_fire_enabled = not self.auto_fire_enabled
-            print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
-        elif event.keysym == 'Escape':
-            # If dev menu is open, close it
-            if self.menu_manager.dev_menu_active:
-                self.close_dev_menu()
-            # If pause menu is open, close it (resume game)
-            elif self.paused:
-                self.hide_pause_menu()
-            # Otherwise, open pause menu
-            else:
-                self.show_pause_menu()
 
     def on_key_release(self, event):
         """Handle key release events for movement."""
