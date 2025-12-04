@@ -91,8 +91,16 @@ class MenuManager:
             canvas_width = int(self.canvas.winfo_width())
             canvas_height = int(self.canvas.winfo_height())
             menu_width = int(canvas_width * 0.15)  # 15% of canvas width
-            # Height: title (30) + 3 buttons (50 each) + spacing (15*2) + padding (40) = 230
-            menu_height = 230
+            
+            # Calculate menu height dynamically based on number of buttons
+            title_height = 50  # Title text height with padding
+            button_height = 50
+            button_spacing = 15
+            num_buttons = len(self.upgrade_choices)
+            padding = 20
+            
+            menu_height = title_height + (num_buttons * button_height) + ((num_buttons - 1) * button_spacing) + padding
+            
             overlay_x = (canvas_width - menu_width) // 2
             overlay_y = (canvas_height - menu_height) // 2
             overlay_width = menu_width
@@ -108,7 +116,7 @@ class MenuManager:
             
             # Title
             title = self.canvas.create_text(
-                overlay_x + overlay_width // 2, overlay_y + 30,
+                overlay_x + overlay_width // 2, overlay_y + title_height // 2,
                 text='CHOOSE AN UPGRADE',
                 fill='lime',
                 font=('Arial', 24, 'bold')
@@ -116,7 +124,7 @@ class MenuManager:
             self.upgrade_menu_elements.append(title)
             
             # Display three upgrade choices as buttons
-            button_y_start = overlay_y + 80
+            button_y_start = overlay_y + title_height
             button_height = 50
             button_spacing = 15
             
