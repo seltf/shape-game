@@ -859,8 +859,8 @@ class Projectile:
             if self.black_hole_level > 0:
                 self._try_spawn_black_hole(ex_center, ey_center)
             
-            # Chain lightning: On initial hit, trigger a chain through level number of targets
-            if self.chain_lightning_level > 0 and not self.is_mini_fork:
+            # Chain lightning: On initial hit only, trigger a chain through level number of targets
+            if self.chain_lightning_level > 0 and not self.is_mini_fork and self.bounces == 0:
                 # Number of targets to chain through: equal to chain_lightning_level (level 1 = 1 chain, etc.)
                 num_chain_targets = self.chain_lightning_level
                 
