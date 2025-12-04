@@ -515,6 +515,333 @@ def cleanup(self):
 
 ---
 
+## AI Agent Instructions for Code Modifications
+
+When an AI agent is tasked with modifying, debugging, or expanding this codebase, the following guidelines ensure quality, consistency, and maintainability:
+
+### Pre-Modification Checklist
+
+1. **Understand Coordinate Systems First**
+   - Never assume global WIDTH/HEIGHT are correct at runtime
+   - Always use `self.window_width` and `self.window_height` for spatial logic
+   - Screen coordinates: `winfo_pointerx/y()`
+   - Canvas coordinates: subtract `winfo_rootx/y()` from screen coords
+   - This is the #1 source of bugs in this codebase
+
+2. **Review Related Tests Before Changing**
+   - Run `python -m pytest test_game.py -q` before making changes
+   - After changes, run again to ensure no regressions
+   - All 28 tests must pass after any modification
+   - If a test fails, the change likely introduced a bug
+
+3. **Check Physics Constants**
+   - Verify collision distance squared: `COLLISION_DISTANCE_SQ = 1024`
+   - Verify enemy sizes: `ENEMY_SIZE_HALF = 20`
+   - Never hardcode these values in entity code
+   - Import from `constants.py` instead
+
+### Type Hints & Code Quality
+
+1. **100% Type Coverage Required**
+   - Every function parameter must have a type hint
+   - Every function return value must have a type hint
+   - Use `Optional[T]` for nullable values
+   - Use `List[T]`, `Dict[K, V]`, `Tuple[T, ...]` for collections
+   - Use `Any` only when necessary (document why)
+
+   Example:
+   ```python
+   def attack(self) -> None:
+       """Launch a projectile if none are active."""
+       
+   def get_attack_direction(self) -> float:
+       """Calculate the angle from player to mouse. Returns radians (-π to π)."""
+   ```
+
+2. **Docstrings on All Functions**
+   - One-line summary describing what the function does
+   - Multi-line summary including parameters and return value behavior
+   - Document important side effects (modifies game state, spawns entities, etc.)
+   - Document assumptions (e.g., "Assumes canvas is fully rendered")
+
+3. **Variable Naming Conventions**
+   - Use descriptive names: `projectile_speed` not `ps`
+   - Use snake_case for variables/functions: `move_player()` not `movePlayer()`
+   - Use UPPER_CASE for constants: `PLAYER_SIZE`, `COLLISION_DISTANCE_SQ`
+   - Prefix private/internal with underscore: `_find_closest_target()`
+   - Use `_id` suffix for Tkinter canvas item IDs: `self.rect_id`, `self.text_id`
+
+### Entity Lifecycle Pattern (MANDATORY)
+
+All entities must follow this pattern:
+
+```python
+class NewEntity:
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, game: Any) -> None:
+        self.canvas = canvas
+        self.game = game
+        self.x = x
+        self.y = y
+        self.rect = canvas.create_oval(...)
+    
+    def update(self) -> bool:
+        """Update entity state. Return True to keep alive, False to despawn."""
+        # ... update logic ...
+        self.canvas.coords(self.rect, self.x-r, self.y-r, self.x+r, self.y+r)
+        return True  # Keep alive
+    
+    def cleanup(self) -> None:
+        """Remove from canvas. Called when entity is despawned."""
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Already deleted
+
+# In Game class:
+def update_new_entities(self) -> None:
+    """Update all new entities and remove dead ones."""
+    alive = []
+    for entity in self.new_entities:
+        if entity.update():
+            alive.append(entity)
+        else:
+            entity.cleanup()
+    self.new_entities = alive
+```
+
+### Collision Detection Pattern (MANDATORY)
+
+Use squared distances to avoid expensive `sqrt()` calls:
+
+```python
+# CORRECT: Use squared distance
+closest_dist_sq = COLLISION_DISTANCE_SQ
+for enemy in self.game.enemies:
+    ex, ey = enemy.get_position()
+    dx = ex - self.x
+    dy = ey - self.y
+    dist_sq = dx * dx + dy * dy  # No sqrt!
+    
+    if dist_sq < closest_dist_sq:
+        closest_dist_sq = dist_sq
+        closest_enemy = enemy
+
+# ONLY use sqrt when necessary for physics:
+dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
+```
+
+### Canvas Operations Safety
+
+1. **Always wrap canvas.delete() in try-except**
+   ```python
+   try:
+       self.canvas.delete(self.rect_id)
+   except tk.TclError:
+       pass  # Item may have already been deleted
+   ```
+
+2. **Don't call winfo methods on destroyed canvas**
+   - Check that canvas exists before calling `winfo_width()`, etc.
+   - Store dimensions in instance variables when known
+
+3. **Update canvas coordinates each frame**
+   - Must call `self.canvas.coords()` after position changes
+   - Without this, visual position won't match actual position
+
+### Game State Management
+
+1. **Never Directly Modify Global Constants at Runtime**
+   - ❌ WRONG: `global WIDTH; WIDTH = new_width`
+   - ✅ RIGHT: Use `self.window_width` instance variable
+   - Global constants are for defaults only
+
+2. **Use computed_weapon_stats for All Weapon Values**
+   - Never hardcode damage, speed, or other stats in entity code
+   - Always read from `self.game.computed_weapon_stats[stat_name]`
+   - This ensures upgrades work consistently everywhere
+
+3. **Track Active Upgrades Correctly**
+   - Upgrades stored in `self.active_upgrades[]` (can have duplicates for leveling)
+   - Count duplicates to determine upgrade level: `self.active_upgrades.count('upgrade_name')`
+   - Use `'upgrade_name' in self.active_upgrades` to check if owned
+
+### Adding New Features
+
+#### Adding a New Upgrade
+
+1. Define in `constants.py`:
+   ```python
+   'my_upgrade': {
+       'name': 'My Upgrade Name',
+       'description': 'What it does',
+       'one_time': False,  # Or True if can only pick once
+       'damage': 2,        # Bonus per level (optional)
+   }
+   ```
+
+2. Add stat computation in `top_down_game.py`:
+   ```python
+   def compute_weapon_stats(self) -> None:
+       # ... existing code ...
+       level = self.active_upgrades.count('my_upgrade')
+       if level > 0:
+           stats['my_stat'] = base_value + (level * bonus_per_level)
+   ```
+
+3. Use in entity or attack logic:
+   ```python
+   my_value = self.game.computed_weapon_stats.get('my_stat', default_value)
+   ```
+
+4. Test with dev menu (Alt+D) before committing
+
+#### Adding a New Entity Type
+
+1. Create class in `entities.py` following entity lifecycle pattern
+2. Add `update_<new_entities>()` method to `Game` class
+3. Call from main `update()` loop
+4. Initialize empty list in `Game.__init__()`
+5. Add to docstring in `update()` showing call sequence
+6. Add tests to `test_game.py` to verify:
+   - Entity spawns correctly
+   - Update is called properly
+   - Cleanup removes from canvas
+   - Collision detection works if applicable
+
+#### Adding a New Menu
+
+1. Create methods in `menus.py` (show_X_menu, close_X_menu)
+2. Store element IDs in lists for easy cleanup
+3. Use actual canvas dimensions: `self.canvas.winfo_width()`
+4. Calculate positions dynamically (not hardcoded)
+5. Add 300ms delay for buttons to prevent accidental clicks
+6. Handle clicks in menu's click handler
+
+### Performance Considerations
+
+1. **Avoid sqrt() in Collision Loops**
+   - Use squared distance comparison instead
+   - Only calculate `math.hypot()` when necessary for physics
+
+2. **Cache Frequently Accessed Values**
+   - Store `canvas_width = self.canvas.winfo_width()` in local var in tight loops
+   - Don't call `winfo_` methods hundreds of times per frame
+
+3. **Use Slice to Avoid Modification During Iteration**
+   ```python
+   # WRONG: Modifying list being iterated
+   for enemy in self.enemies:
+       if should_remove:
+           self.enemies.remove(enemy)
+   
+   # CORRECT: Iterate copy, modify original
+   for enemy in self.enemies[:]:
+       if should_remove:
+           self.enemies.remove(enemy)
+   ```
+
+4. **Check Entity Existence Before Accessing**
+   - Enemies might be removed between frames
+   - Always verify entity still in list before using: `if enemy in self.game.enemies`
+
+### Testing Requirements
+
+1. **Run Tests After ANY Change**
+   ```bash
+   python -m pytest test_game.py -q
+   ```
+
+2. **All 28 Tests Must Pass**
+   - If a test fails, the change broke something
+   - Fix the code, not the test
+   - Only add new tests when adding new features
+
+3. **Test in Game if GUI-Related**
+   - Visual changes should be manually verified
+   - Run `python top_down_game.py` and test with player
+   - Check on various screen sizes if coordinate-related
+
+4. **Check for Memory Leaks**
+   - Play for 5+ minutes
+   - Watch for entities accumulating without despawning
+   - Check task manager for memory growth
+
+### Git Commit Guidelines
+
+1. **Atomic Commits**
+   - One logical change per commit
+   - ❌ Wrong: "Fix collision, add upgrade, improve menu"
+   - ✅ Right: "Fix projectile collision detection with enemies"
+
+2. **Descriptive Commit Messages**
+   - Format: `Fix: Issue description` or `Add: Feature description`
+   - Include what was changed and why
+   - Reference any related bugs or features
+
+3. **Verify Before Committing**
+   - Run all tests
+   - Manual gameplay test if touching visuals/physics
+   - Review changes: `git diff`
+
+### Debugging Strategy
+
+1. **Add Debug Output**
+   ```python
+   print(f"[DEBUG] Player position: ({self.x:.1f}, {self.y:.1f})")
+   print(f"[ACTION] Enemy spawned at ({ex:.1f}, {ey:.1f})")
+   print(f"[ERROR] Collision detection failed: {e}")
+   ```
+
+2. **Check Coordinate Systems First**
+   - Is the entity using screen or canvas coordinates?
+   - Are you comparing screen coords with canvas coords?
+   - Is the bounds check using correct canvas dimensions?
+
+3. **Verify Entity Lists Aren't Growing**
+   - Print list lengths periodically: `len(self.enemies)`, `len(self.projectiles)`
+   - Accumulating entities = memory leak
+
+4. **Use Dev Menu for Testing**
+   - Press Alt+D to open dev menu
+   - Spawn enemies, give XP, add upgrades quickly
+   - Faster than playing through the game
+
+### Documentation Standards
+
+1. **Update CODEBASE_DOCUMENTATION.md When:**
+   - Adding new entity types
+   - Adding new upgrade system features
+   - Changing coordinate system logic
+   - Adding new game mechanics
+   - Modifying game loop sequence
+
+2. **Keep Docstrings Current**
+   - If function behavior changes, update docstring
+   - If new parameters added, document them
+   - If side effects change, document new behavior
+
+### Code Review Checklist for AI Agents
+
+Before completing any task, verify:
+
+- [ ] All tests pass (28/28)
+- [ ] Type hints on all functions
+- [ ] Docstrings on all functions
+- [ ] Used `self.window_width/height` not global WIDTH/HEIGHT
+- [ ] Used `self.canvas.winfo_width/height()` for actual dimensions
+- [ ] Collision logic uses squared distances
+- [ ] Entity cleanup is wrapped in try-except
+- [ ] Canvas coordinates updated after position changes
+- [ ] Weapon stats read from `computed_weapon_stats`
+- [ ] No hardcoded values that should be constants
+- [ ] Descriptive variable names (no single letters except i, j, k for loops)
+- [ ] Memory leak check (entities despawn properly)
+- [ ] Manual gameplay test if touching visuals/physics
+- [ ] Git commit made with descriptive message
+- [ ] Documentation updated if adding features
+
+---
+
 ## Contact & Questions
 
 For questions about specific systems or features, refer to the relevant module's docstrings and inline comments. Each function includes type hints and documentation.
