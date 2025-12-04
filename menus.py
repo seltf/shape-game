@@ -434,8 +434,8 @@ class MenuManager:
         canvas_width = int(self.canvas.winfo_width())
         canvas_height = int(self.canvas.winfo_height())
         menu_width = int(canvas_width * 0.2)  # 20% of canvas width
-        # Height: title (20) + 11 buttons (35 each) + spacing (5*11) + padding (40) = 505
-        menu_height = 505
+        # Height: title (20) + 12 buttons (35 each) + spacing (5*12) + padding (40) = 540
+        menu_height = 540
         overlay_x = (canvas_width - menu_width) // 2
         overlay_y = (canvas_height - menu_height) // 2
         overlay_width = menu_width
@@ -467,6 +467,7 @@ class MenuManager:
             ('Add Black Hole', 'upgrade_black_hole', '#4a4a8a'),
             ('Add Homing', 'upgrade_homing', '#4a4a8a'),
             ('Add Shield', 'upgrade_shield', '#4a4a8a'),
+            ('Add Attack Range', 'upgrade_attack_range', '#4a4a8a'),
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
             ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
@@ -519,6 +520,8 @@ class MenuManager:
                 self.game.add_upgrade('homing')
             elif action == 'upgrade_shield':
                 self.game.add_upgrade('shield')
+            elif action == 'upgrade_attack_range':
+                self.game.add_upgrade('attack_range')
             elif action == 'level_up':
                 self.game.level += 1
                 self.game.xp_for_next_level = int(self.game.xp_for_next_level * 1.35)
