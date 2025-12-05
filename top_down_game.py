@@ -897,7 +897,7 @@ class Game:
         # Play attack sound asynchronously
         print(f"[ACTION] Player attacking - firing projectile")
         # Use unthrottled beep so rapid fire sounds clean, not crunchy
-        play_beep_unthrottled(500, 50, self)
+        play_beep_unthrottled(400, 50, self)
         
         center_x, center_y = self.player.get_center()
         angle = self.get_attack_direction()
