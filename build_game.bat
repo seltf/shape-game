@@ -1,6 +1,6 @@
 @echo off
-REM Top Down Game - Build Executable
-REM This script creates a standalone .exe file
+REM Shape-Game - Build Executable
+REM This script creates a standalone .exe file using PyInstaller
 
 setlocal enabledelayedexpansion
 
@@ -14,24 +14,31 @@ echo.
 echo Cleaning old builds...
 if exist dist rmdir /s /q dist
 if exist build rmdir /s /q build
-if exist TopDownGame.spec del TopDownGame.spec
+if exist yoyo-game.spec del yoyo-game.spec
 
 echo.
 echo Building executable...
+REM PyInstaller with all necessary modules from refactored structure
 "%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "yoyo-game" ^
     --icon=NONE ^
     --add-data "sounds;sounds" ^
+    --hidden-import=entities ^
+    --hidden-import=collision ^
+    --hidden-import=menus ^
+    --hidden-import=audio ^
+    --hidden-import=constants ^
+    --hidden-import=utils ^
     --distpath=dist ^
     --workpath=build ^
     --specpath=. ^
     top_down_game.py
 
 echo.
-if exist dist\TopDownGame.exe (
+if exist dist\yoyo-game.exe (
     echo.
     echo ========================================
     echo Build complete!
-    echo Your game is in: dist\TopDownGame.exe
+    echo Your game is in: dist\yoyo-game.exe
     echo ========================================
 ) else (
     echo.
