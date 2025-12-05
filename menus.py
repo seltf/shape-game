@@ -570,7 +570,7 @@ class MenuManager:
             return
         
         # Play button click sound
-        play_beep_async(800, 100, self.game)
+        play_beep_async(400, 80, self.game)
         
         # Check which upgrade button was clicked
         import sys
@@ -602,7 +602,7 @@ class MenuManager:
             return
         
         # Play button click sound
-        play_beep_async(800, 100, self.game)
+        play_beep_async(400, 80, self.game)
         
         # Check which button was clicked
         for action, btn_id in self.pause_buttons.items():
@@ -632,7 +632,7 @@ class MenuManager:
             return
         
         # Play button click sound
-        play_beep_async(800, 100, self.game)
+        play_beep_async(400, 80, self.game)
         
         # Check which button was clicked
         for action, btn_id in self.dev_buttons.items():
