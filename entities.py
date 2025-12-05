@@ -1256,7 +1256,7 @@ class Minion:
         px, py = self.game.player.get_center()
         
         # Follow player - move towards player if not too close
-        follow_distance = 60  # Stay within this distance of player
+        follow_distance = 80  # Stay within this distance of player (increased from 60)
         dx = px - self.x
         dy = py - self.y
         dist_to_player = math.hypot(dx, dy)

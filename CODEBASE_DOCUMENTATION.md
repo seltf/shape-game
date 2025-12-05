@@ -103,7 +103,7 @@ self.active_upgrades[]                  # List of collected upgrades
 
 **Minion**
 - Friendly unit spawned by summon_minion upgrade
-- Follows player and maintains distance (60px)
+- Follows player and maintains distance (80px)
 - **Maintains spacing from other minions** (40px minimum distance with repulsion)
 - Attacks nearby enemies within range (120px)
 - Fires simple projectiles at enemies (12px/frame speed)
@@ -388,7 +388,7 @@ self.vy += (target_vy - self.vy) * homing_strength
 
 **Summon Minion System**
 - **Minion Spawning:** When summon_minion upgrade is selected, a friendly minion spawns 50px away from player
-- **Minion AI:** Minions follow the player, maintaining ~60px distance; apply friction and smooth acceleration toward player
+- **Minion AI:** Minions follow the player, maintaining ~80px distance; apply friction and smooth acceleration toward player
 - **Minion Spacing:** Minions repel each other when closer than 40px; prevents clustering around player (15% repulsion strength per frame)
 - **Minion Combat:** Minions scan for enemies within 120px range every 600ms; target closest enemy when in range
 - **Minion Projectiles:** Fire simple yellow projectiles (12px/frame) that deal 1 damage; despawn after 3 seconds or off-screen
