@@ -10,7 +10,7 @@ from constants import (
     WIDTH, HEIGHT,
     WEAPON_UPGRADES, LINKED_UPGRADES
 )
-from audio import stop_background_music, start_background_music
+from audio import stop_background_music, start_background_music, play_beep_async
 
 
 class MenuManager:
@@ -569,6 +569,9 @@ class MenuManager:
         if not self.upgrade_menu_active or not self.upgrade_menu_clickable:
             return
         
+        # Play button click sound
+        play_beep_async(800, 100, self.game)
+        
         # Check which upgrade button was clicked
         import sys
         upgrade_buttons_copy = list(self.upgrade_buttons.items())
@@ -598,6 +601,9 @@ class MenuManager:
         if not self.game.paused or self.dev_menu_active:
             return
         
+        # Play button click sound
+        play_beep_async(800, 100, self.game)
+        
         # Check which button was clicked
         for action, btn_id in self.pause_buttons.items():
             coords = self.canvas.coords(btn_id)
@@ -624,6 +630,9 @@ class MenuManager:
         """Handle clicks in the dev menu."""
         if not self.dev_menu_active:
             return
+        
+        # Play button click sound
+        play_beep_async(800, 100, self.game)
         
         # Check which button was clicked
         for action, btn_id in self.dev_buttons.items():
