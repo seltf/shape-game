@@ -175,6 +175,28 @@ class AudioManager:
             self.stop_background_music()
         else:
             self.start_background_music()
+    
+    def play_beep_unthrottled(self, frequency: int, duration: int) -> None:
+        """
+        Play a beep without throttling. Used for rapid-fire attacks.
+        
+        Args:
+            frequency: Frequency in Hz
+            duration: Duration in milliseconds
+        """
+        if not self.sound_enabled:
+            return
+        
+        print(f"[SOUND] Playing unthrottled beep: {frequency}Hz for {duration}ms")
+        
+        def beep():
+            try:
+                winsound.Beep(frequency, duration)
+            except Exception as e:
+                print(f"[SOUND] Failed to play beep: {e}")
+        
+        thread = threading.Thread(target=beep, daemon=True)
+        thread.start()
 
 
 # Global audio manager instance
@@ -205,6 +227,14 @@ def play_beep_async(frequency: int, duration: int, game_instance=None) -> None:
     if game_instance is not None:
         manager.sound_enabled = game_instance.sound_enabled
     manager.play_beep_async(frequency, duration)
+
+
+def play_beep_unthrottled(frequency: int, duration: int, game_instance=None) -> None:
+    """Play a beep without throttling - for rapid-fire attacks."""
+    manager = get_audio_manager()
+    if game_instance is not None:
+        manager.sound_enabled = game_instance.sound_enabled
+    manager.play_beep_unthrottled(frequency, duration)
 
 
 def start_background_music(game_instance=None) -> None:

@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 # Import from separate modules
 from constants import *
-from audio import play_sound_async, play_beep_async, start_background_music, stop_background_music
+from audio import play_sound_async, play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, Particle, Shard, Projectile
 from menus import MenuManager
 from collision import CollisionDetector, PlayerCollisionHandler
@@ -896,7 +896,8 @@ class Game:
         
         # Play attack sound asynchronously
         print(f"[ACTION] Player attacking - firing projectile")
-        play_beep_async(500, 50, self)
+        # Use unthrottled beep so rapid fire sounds clean, not crunchy
+        play_beep_unthrottled(500, 50, self)
         
         center_x, center_y = self.player.get_center()
         angle = self.get_attack_direction()
