@@ -9,9 +9,9 @@ A fast-paced top-down shooter where you control a player dodging and defeating e
 - `O` - Move Down  
 - `A` - Move Left
 - `E` - Move Right
-- `SPACE` - Dash (short burst of speed)
+- `SPACE` - Toggle Auto-Fire
 - `ESC` - Pause Menu
-- `CLICK` - Fire projectile (auto-fires at closest enemy)
+- `CLICK` - Fire projectile
 
 **Game Mechanics:**
 - **Score**: Tracks total enemy kills
