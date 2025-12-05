@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 # Import from separate modules
 from constants import *
 from audio import play_sound_async, play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
-from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, Particle, Shard, Projectile
+from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
 from collision import CollisionDetector, PlayerCollisionHandler
 
@@ -49,6 +49,8 @@ class Game:
         self.particles = []
         self.shards = []  # Track shrapnel shards
         self.projectiles = []
+        self.minions = []  # Track friendly minions
+        self.minion_projectiles = []  # Track minion projectiles
         self.game_time_ms = 0  # Track time played in milliseconds
         self.last_dash_dx = 1  # Default dash direction (right)
         self.last_dash_dy = 0
@@ -176,6 +178,9 @@ class Game:
             # Only update player shield if a shield-related upgrade was picked
             if upgrade_key == 'shield':
                 self._update_player_shield()
+            # Spawn a minion when summon_minion upgrade is picked
+            elif upgrade_key == 'summon_minion':
+                self._spawn_minion()
             return True
         except Exception as e:
             return False
@@ -421,6 +426,8 @@ class Game:
         self.shards.clear()
         self.projectiles.clear()
         self.black_holes.clear()  # Also clear black holes
+        self.minions.clear()  # Clear minions
+        self.minion_projectiles.clear()  # Clear minion projectiles
         self.active_upgrades = []
         self.computed_weapon_stats = self.compute_weapon_stats()
         self.xp = 0
@@ -539,6 +546,8 @@ class Game:
             self.update_shards()
             self.update_projectiles()
             self.update_black_holes()
+            self.update_minions()  # Update friendly minions
+            self.update_minion_projectiles()  # Update minion projectiles
             self.update_ammo_orbs()
             self.update_dash_cooldown()
             self.update_shield_cooldown()
@@ -636,6 +645,26 @@ class Game:
             shard = Shard(self.canvas, x, y, vx, vy, self, lifetime=1000, explosive=False)
             self.shards.append(shard)
 
+    def _spawn_minion(self) -> None:
+        """Spawn a new minion near the player."""
+        px, py = self.player.get_center()
+        
+        # Spawn minion at a random position around the player
+        spawn_distance = 50
+        angle = random.random() * 2 * math.pi
+        minion_x = px + math.cos(angle) * spawn_distance
+        minion_y = py + math.sin(angle) * spawn_distance
+        
+        # Clamp to screen bounds
+        minion_x = max(15, min(self.window_width - 15, minion_x))
+        minion_y = max(15, min(self.window_height - 15, minion_y))
+        
+        # Create and add minion
+        minion = Minion(self.canvas, minion_x, minion_y, self)
+        self.minions.append(minion)
+        
+        print(f"[ACTION] Minion summoned (total: {len(self.minions)})")
+
     def update_particles(self):
         """Update all particles and remove dead ones."""
         alive = []
@@ -675,6 +704,26 @@ class Game:
             else:
                 black_hole.cleanup()
         self.black_holes = alive_black_holes
+
+    def update_minions(self) -> None:
+        """Update all minions and remove dead ones."""
+        alive_minions = []
+        for minion in self.minions:
+            if minion.update():
+                alive_minions.append(minion)
+            else:
+                minion.cleanup()
+        self.minions = alive_minions
+
+    def update_minion_projectiles(self) -> None:
+        """Update all minion projectiles and remove dead ones."""
+        alive_projectiles = []
+        for projectile in self.minion_projectiles:
+            if projectile.update():
+                alive_projectiles.append(projectile)
+            else:
+                projectile.cleanup()
+        self.minion_projectiles = alive_projectiles
 
     def update_dash_cooldown(self):
         """Update dash cooldown timer."""

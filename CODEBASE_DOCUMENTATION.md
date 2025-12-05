@@ -16,7 +16,7 @@
 
 ### Core Modules
 
-#### 1. **top_down_game.py** (909 lines)
+#### 1. **top_down_game.py** (980 lines)
 **Purpose:** Main game loop, state management, and event handling
 
 **Key Responsibilities:**
@@ -36,6 +36,8 @@ self.projectiles[]                      # List of active projectiles
 self.particles[]                        # Visual effects (poof, death animations)
 self.shards[]                           # Shrapnel/debris particles
 self.black_holes[]                      # Active black hole upgrades
+self.minions[]                          # Friendly minions from summon_minion upgrade
+self.minion_projectiles[]               # Projectiles fired by minions
 self.computed_weapon_stats{}            # Current weapon stats (damage, speed, etc.)
 self.active_upgrades[]                  # List of collected upgrades
 ```
@@ -58,7 +60,7 @@ self.active_upgrades[]                  # List of collected upgrades
 
 ---
 
-#### 2. **entities.py** (1,207 lines)
+#### 2. **entities.py** (1,468 lines)
 **Purpose:** All game entity classes and their behaviors
 
 **Entity Classes:**
@@ -98,6 +100,23 @@ self.active_upgrades[]                  # List of collected upgrades
 - Pulls nearby enemies toward center
 - Deals damage on contact
 - Self-destructs after 5 seconds
+
+**Minion**
+- Friendly unit spawned by summon_minion upgrade
+- Follows player and maintains distance (60px)
+- **Maintains spacing from other minions** (40px minimum distance with repulsion)
+- Attacks nearby enemies within range (120px)
+- Fires simple projectiles at enemies (12px/frame speed)
+- Has 600ms attack cooldown between shots
+- Persists for entire game session
+
+**MinionProjectile**
+- Simple projectile fired by minions
+- Travels in straight line at constant velocity
+- Despawns after 3 seconds or when off-screen
+- Deals 1 damage to basic enemies, reduces tank health by 1
+- Awards same XP as player projectiles (1/3/7 based on enemy type)
+- Cannot bounce or chain like player projectiles
 
 **Key Methods in All Entities:**
 - `update() -> bool`: Returns True if entity should persist, False to despawn
@@ -218,6 +237,8 @@ update() called
 ├─ update_shards()                   # Update shrapnel, check for hits
 ├─ update_projectiles()              # Update projectiles, check collisions
 ├─ update_black_holes()              # Update black holes, pull enemies
+├─ update_minions()                  # Update minions, handle AI & attacks
+├─ update_minion_projectiles()       # Update minion projectiles, check hits
 ├─ update_ammo_orbs()                # Update ammo drops (future feature)
 ├─ update_dash_cooldown()            # Cooldown tick for dash ability
 └─ update_shield_cooldown()          # Cooldown tick for shield
@@ -347,6 +368,9 @@ self.vy += (target_vy - self.vy) * homing_strength
    **Boolean** (one-time effects):
    - Homing, Splits, Shrapnel, Dash, Shield
 
+   **Summoner** (spawns allied units):
+   - Summon Minion: Spawns a friendly minion that follows player and attacks enemies. Can be picked multiple times to have multiple minions.
+
    **Linked** (require prerequisites):
    - Chain Lightning (requires base damage level 5)
    - Mini-Forks (requires chain lightning)
@@ -361,6 +385,15 @@ self.vy += (target_vy - self.vy) * homing_strength
 - State is tracked in `self.auto_fire_enabled` boolean
 - Attack cooldown managed by `self.attack_cooldown` counter in milliseconds
 - Useful for extended play sessions or handling many enemies
+
+**Summon Minion System**
+- **Minion Spawning:** When summon_minion upgrade is selected, a friendly minion spawns 50px away from player
+- **Minion AI:** Minions follow the player, maintaining ~60px distance; apply friction and smooth acceleration toward player
+- **Minion Spacing:** Minions repel each other when closer than 40px; prevents clustering around player (15% repulsion strength per frame)
+- **Minion Combat:** Minions scan for enemies within 120px range every 600ms; target closest enemy when in range
+- **Minion Projectiles:** Fire simple yellow projectiles (12px/frame) that deal 1 damage; despawn after 3 seconds or off-screen
+- **Reward System:** Minion kills award same XP as player projectiles (1 for basic, 3 for triangles, 7 for pentagons)
+- **Stacking:** Can pick summon_minion multiple times to spawn additional minions (visual: multiple green circles with spacing)
 
 ### Adding New Upgrades
 
@@ -385,6 +418,56 @@ if level > 0:
 ```python
 my_value = self.game.computed_weapon_stats['my_stat']
 ```
+
+### Adding New Summoner Upgrades (Like Minions)
+
+1. Create new entity class in `entities.py` following the entity lifecycle pattern:
+```python
+class MyAlly:
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, game: Any) -> None:
+        # Initialize ally
+    
+    def update(self) -> bool:
+        # Update logic, return False to despawn
+        return True
+    
+    def cleanup(self) -> None:
+        # Remove from canvas
+```
+
+2. Add to `WEAPON_UPGRADES` in `constants.py`:
+```python
+'summon_my_ally': {'name': 'Summon My Ally', 'description': 'Spawn an ally that helps'}
+```
+
+3. In `add_upgrade()` in `top_down_game.py`, add special handling:
+```python
+elif upgrade_key == 'summon_my_ally':
+    self._spawn_my_ally()
+```
+
+4. Add spawn and update methods to `Game` class:
+```python
+def _spawn_my_ally(self) -> None:
+    """Spawn new ally near player."""
+    # Calculate spawn position near player
+    ally = MyAlly(self.canvas, x, y, self)
+    self.my_allies.append(ally)
+
+def update_my_allies(self) -> None:
+    """Update all allies and remove dead ones."""
+    alive = []
+    for ally in self.my_allies:
+        if ally.update():
+            alive.append(ally)
+        else:
+            ally.cleanup()
+    self.my_allies = alive
+```
+
+5. Call `update_my_allies()` in the main `update()` loop
+6. Initialize `self.my_allies = []` in `__init__()`
+7. Clear allies in `reset_game()`: `self.my_allies.clear()`
 
 ---
 
@@ -478,6 +561,7 @@ def cleanup(self):
 - No inventory system
 - No persistent progression (resets each game)
 - Audio uses basic beep generation (no audio files)
+- Minions have basic AI (no complex behavior trees)
 
 ### Potential Enhancements
 1. **Multi-projectile system**: Allow more than one main projectile
@@ -486,6 +570,9 @@ def cleanup(self):
 4. **Procedural generation**: Randomly generated levels
 5. **Leaderboard**: Score persistence
 6. **Mobile support**: Touch controls
+7. **Advanced Minion AI**: Special abilities, unique minion types (healer, tank, ranger)
+8. **Boss Battles**: Special powerful enemies with patterns
+9. **Minion Upgrades**: Enhance minion damage, speed, or attack rate
 
 ---
 
@@ -505,6 +592,12 @@ def cleanup(self):
 - Added 100% type hint coverage
 - Removed 1,180 lines of duplicate code
 - Result: Reduced 2,876 lines → 909 lines (main file)
+
+### Phase 4: Summon Minion Feature
+- Added `Minion` and `MinionProjectile` entity classes
+- Implemented minion spawning and AI system
+- Added minion update loops to game cycle
+- Result: Enhanced gameplay with allied unit support
 
 ### Bug Fixes
 - **Projectile Firing:** Fixed by using canvas dimensions instead of global constants

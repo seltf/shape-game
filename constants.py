@@ -69,6 +69,7 @@ WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
     'attack_range': {'attack_range': 250, 'name': 'Attack Range'},
+    'summon_minion': {'name': 'Summon Minion', 'description': 'Spawn a friendly minion that attacks enemies'},
 }
 
 # Linked upgrades - only appear if prerequisite(s) are owned

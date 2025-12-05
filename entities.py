@@ -1217,3 +1217,282 @@ class Projectile:
             self.canvas.delete(self.rect)
         except tk.TclError:
             pass  # Canvas item may have already been deleted
+
+
+class Minion:
+    """
+    Represents a friendly minion that follows the player and attacks nearby enemies.
+    Summoned by the summon_minion upgrade.
+    """
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, game: Any, minion_size: int = 12) -> None:
+        """Initialize minion at (x, y)."""
+        self.canvas: tk.Canvas = canvas
+        self.game: Any = game
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = 0  # Velocity x
+        self.vy: float = 0  # Velocity y
+        self.size: int = minion_size
+        self.max_speed: int = 4  # Slightly slower than player
+        self.attack_range: int = 120  # Distance to engage enemies
+        self.attack_cooldown: int = 0  # Milliseconds until next attack
+        self.attack_cooldown_reset: int = 600  # Attack every 600ms
+        self.last_target: Optional[Any] = None  # Track last target to maintain focus
+        
+        # Visual representation - green circle for minion
+        self.rect: int = self.canvas.create_oval(
+            x - self.size // 2, y - self.size // 2,
+            x + self.size // 2, y + self.size // 2,
+            fill='lime'
+        )
+
+    def update(self) -> bool:
+        """Update minion position and attack logic. Returns True if minion should persist."""
+        # Update attack cooldown
+        if self.attack_cooldown > 0:
+            self.attack_cooldown -= 50  # Update is called every 50ms
+        
+        # Get player position
+        px, py = self.game.player.get_center()
+        
+        # Follow player - move towards player if not too close
+        follow_distance = 60  # Stay within this distance of player
+        dx = px - self.x
+        dy = py - self.y
+        dist_to_player = math.hypot(dx, dy)
+        
+        # Calculate repulsion from other minions
+        repulsion_x = 0.0
+        repulsion_y = 0.0
+        min_distance = 40  # Minions try to stay this far apart
+        repulsion_strength = 0.15  # How strong the repulsion is
+        
+        for other_minion in self.game.minions:
+            if other_minion is self:
+                continue
+            
+            ox, oy = other_minion.get_position()
+            dx_other = self.x - ox
+            dy_other = self.y - oy
+            dist_to_other = math.hypot(dx_other, dy_other)
+            
+            # If too close, push away
+            if dist_to_other < min_distance and dist_to_other > 0:
+                # Direction away from other minion
+                repulsion_x += (dx_other / dist_to_other) * repulsion_strength
+                repulsion_y += (dy_other / dist_to_other) * repulsion_strength
+        
+        # Apply repulsion to velocity
+        self.vx += repulsion_x
+        self.vy += repulsion_y
+        
+        # If too far from player, move closer
+        if dist_to_player > follow_distance:
+            # Apply acceleration towards player
+            target_vx = (dx / dist_to_player) * self.max_speed
+            target_vy = (dy / dist_to_player) * self.max_speed
+            
+            # Smoothly blend velocity toward target
+            self.vx += (target_vx - self.vx) * 0.2
+            self.vy += (target_vy - self.vy) * 0.2
+        else:
+            # Close enough, apply friction
+            self.vx *= 0.85
+            self.vy *= 0.85
+        
+        # Clamp velocity to max speed
+        speed = math.hypot(self.vx, self.vy)
+        if speed > self.max_speed:
+            self.vx = (self.vx / speed) * self.max_speed
+            self.vy = (self.vy / speed) * self.max_speed
+        
+        # Update position
+        self.x += self.vx
+        self.y += self.vy
+        
+        # Clamp to screen bounds (with some margin)
+        margin = 20
+        if self.x < margin:
+            self.x = margin
+        if self.x > self.game.window_width - margin:
+            self.x = self.game.window_width - margin
+        if self.y < margin:
+            self.y = margin
+        if self.y > self.game.window_height - margin:
+            self.y = self.game.window_height - margin
+        
+        # Update canvas position
+        self.canvas.coords(
+            self.rect,
+            self.x - self.size // 2,
+            self.y - self.size // 2,
+            self.x + self.size // 2,
+            self.y + self.size // 2
+        )
+        
+        # Check for enemies in attack range
+        if self.attack_cooldown <= 0:
+            self._try_attack()
+        
+        return True  # Minions persist until player dies
+
+    def _try_attack(self) -> None:
+        """Find and attack closest enemy within range."""
+        closest_enemy = None
+        closest_dist_sq = self.attack_range * self.attack_range
+        
+        for enemy in self.game.enemies:
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
+            
+            if dist_sq < closest_dist_sq:
+                closest_dist_sq = dist_sq
+                closest_enemy = enemy
+        
+        if closest_enemy:
+            self._fire_at_enemy(closest_enemy)
+            self.attack_cooldown = self.attack_cooldown_reset
+
+    def _fire_at_enemy(self, enemy: Any) -> None:
+        """Fire a minion projectile at the given enemy."""
+        ex, ey = enemy.get_position()
+        ex_center = ex + ENEMY_SIZE_HALF
+        ey_center = ey + ENEMY_SIZE_HALF
+        
+        # Calculate direction to enemy
+        dx = ex_center - self.x
+        dy = ey_center - self.y
+        dist = math.hypot(dx, dy)
+        
+        if dist > 0:
+            # Create minion projectile
+            projectile_speed = 12
+            vx = (dx / dist) * projectile_speed
+            vy = (dy / dist) * projectile_speed
+            
+            # Create projectile at minion position
+            minion_projectile = MinionProjectile(self.game.canvas, self.x, self.y, vx, vy, self.game)
+            self.game.minion_projectiles.append(minion_projectile)
+            
+            # Play attack sound
+            play_beep_async(500, 15, self.game)
+
+    def cleanup(self) -> None:
+        """Remove minion from canvas."""
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Canvas item may have already been deleted
+
+    def get_position(self) -> Tuple[float, float]:
+        """Return the center coordinates of the minion."""
+        return self.x, self.y
+
+
+class MinionProjectile:
+    """
+    Represents a projectile fired by a minion.
+    Simple projectile that damages enemies on contact.
+    """
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any) -> None:
+        """Initialize minion projectile at (x, y) with velocity (vx, vy)."""
+        self.canvas: tk.Canvas = canvas
+        self.game: Any = game
+        self.x: float = x
+        self.y: float = y
+        self.vx: float = vx
+        self.vy: float = vy
+        self.time_alive: int = 0
+        self.max_lifetime: int = 3000  # 3 seconds before despawn
+        self.collision_radius: int = 8
+        
+        # Visual representation - small yellow projectile
+        self.rect: int = self.canvas.create_oval(
+            x - 3, y - 3,
+            x + 3, y + 3,
+            fill='yellow'
+        )
+
+    def update(self) -> bool:
+        """Update projectile position and check for collisions. Returns False if projectile should despawn."""
+        # Track lifetime
+        self.time_alive += 50  # Update is called every 50ms
+        
+        # Despawn if lifetime exceeded
+        if self.time_alive >= self.max_lifetime:
+            return False
+        
+        # Update position
+        self.x += self.vx
+        self.y += self.vy
+        self.canvas.coords(self.rect, self.x - 3, self.y - 3, self.x + 3, self.y + 3)
+        
+        # Check bounds - despawn if off screen
+        if (self.x < -50 or self.x > self.game.window_width + 50 or
+            self.y < -50 or self.y > self.game.window_height + 50):
+            return False
+        
+        # Check for enemy collision
+        for enemy in self.game.enemies[:]:
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            
+            dx = ex_center - self.x
+            dy = ey_center - self.y
+            dist_sq = dx * dx + dy * dy
+            
+            if dist_sq < (self.collision_radius + ENEMY_SIZE_HALF) ** 2:
+                # Collision! Deal damage to enemy
+                self.game.create_death_poof(ex_center, ey_center)
+                
+                # Check enemy type for damage handling
+                is_pentagon = isinstance(enemy, PentagonEnemy)
+                is_triangle = isinstance(enemy, TriangleEnemy)
+                enemy_dies = True
+                
+                if is_pentagon or is_triangle:
+                    # Tank/triangle enemy takes damage
+                    if enemy.take_damage():
+                        # Still alive after damage
+                        enemy_dies = False
+                    else:
+                        # Enemy is now dead
+                        enemy_dies = True
+                
+                if enemy_dies:
+                    # Remove enemy and award XP
+                    self.game.enemies.remove(enemy)
+                    self.game.canvas.delete(enemy.rect)
+                    self.game.score += 1
+                    self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
+                    
+                    # Award XP for kill
+                    if is_pentagon:
+                        xp_reward = 7
+                    elif is_triangle:
+                        xp_reward = 3
+                    else:
+                        xp_reward = 1
+                    self.game.add_xp(xp_reward)
+                
+                # Projectile despawns after hit
+                return False
+        
+        return True
+
+    def cleanup(self) -> None:
+        """Remove minion projectile from canvas."""
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass  # Canvas item may have already been deleted
+
+    def get_position(self) -> Tuple[float, float]:
+        """Return the position of the projectile."""
+        return self.x, self.y
