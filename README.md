@@ -30,12 +30,6 @@ A fast-paced top-down shooter where you control a player dodging and defeating e
 - **Square Enemies** - Red, weak, 1 hit to kill
 - **Triangle Enemies** - Orange, tough, 3 hits to kill (appears at Level 5+)
 
-**Gameplay Tips:**
-- Position yourself to maximize bounces
-- Stack the same upgrades for better scaling (Extra Bounce x3 is powerful!)
-- Triangle enemies are worth 3x the XP, use them to level up faster
-- Dash away from enemy clusters
-- Shrapnel shards only kill one enemy each
 
 ## Installation
 
