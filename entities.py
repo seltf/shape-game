@@ -735,11 +735,8 @@ class Projectile:
         # Track lifetime
         self.time_alive += 50  # Update is called every 50ms
         
-        # Check if projectile has traveled beyond max range first (distance check takes priority)
-        if not self.returning and self.distance_traveled > self.max_distance:
-            self.returning = True
-        # If not already returning, check if time limit exceeded (scaled by distance)
-        elif not self.returning and self.time_alive >= self.timeout_ms:
+        # If not already returning, check if time limit exceeded
+        if not self.returning and self.time_alive >= self.timeout_ms:
             self.returning = True
         
         # Return animation
@@ -780,10 +777,25 @@ class Projectile:
             # Target is dead, find a new one
             self.current_target = self._find_next_target()
         
-        self.x += self.vx
-        self.y += self.vy
-        # Track total distance traveled from spawn point
-        self.distance_traveled += math.hypot(self.vx, self.vy)
+        # Calculate movement distance
+        movement_dist = math.hypot(self.vx, self.vy)
+        
+        # Check if movement would exceed max distance
+        if not self.returning and self.distance_traveled + movement_dist > self.max_distance:
+            # Clamp movement to stay within max_distance
+            remaining_distance = self.max_distance - self.distance_traveled
+            if remaining_distance > 0:
+                scale_factor = remaining_distance / movement_dist
+                self.x += self.vx * scale_factor
+                self.y += self.vy * scale_factor
+                self.distance_traveled = self.max_distance
+            self.returning = True
+        else:
+            # Normal movement
+            self.x += self.vx
+            self.y += self.vy
+            self.distance_traveled += movement_dist
+        
         self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
         
         # Check for enemy collision - use squared distances to avoid sqrt
