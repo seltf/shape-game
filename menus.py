@@ -379,8 +379,10 @@ class MenuManager:
 
     def hide_pause_menu(self) -> None:
         """Hide the pause menu and resume the game."""
+        print("[DEBUG] menu_manager.hide_pause_menu() called")
         # Explicitly clear everything
         self.game.paused = False
+        print(f"[DEBUG] Set game.paused = False, now: {self.game.paused}")
         self.pause_menu_id = None
         self.pause_buttons = {}
         
@@ -395,6 +397,7 @@ class MenuManager:
                 except:
                     pass  # Element may already be deleted
             self.pause_menu_elements = []
+        print("[DEBUG] Pause menu hidden successfully")
 
     def quit_game(self) -> None:
         """Close the game window and exit."""

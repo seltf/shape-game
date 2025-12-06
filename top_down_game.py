@@ -366,7 +366,9 @@ class Game:
 
     def hide_pause_menu(self):
         """Hide the pause menu and resume the game."""
+        print("[DEBUG] top_down_game.hide_pause_menu() called")
         self.menu_manager.hide_pause_menu()
+        print(f"[DEBUG] After hide, self.paused={self.paused}")
 
     def quit_game(self):
         """Close the game window and exit."""
@@ -451,14 +453,18 @@ class Game:
             print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
             return
         elif event.keysym == 'Escape':
+            print(f"[DEBUG] Escape pressed. paused={self.paused}, dev_menu_active={self.menu_manager.dev_menu_active}")
             # If dev menu is open, close it
             if self.menu_manager.dev_menu_active:
+                print("[DEBUG] Closing dev menu")
                 self.close_dev_menu()
             # If pause menu is open, close it (resume game)
             elif self.paused:
+                print("[DEBUG] Closing pause menu")
                 self.hide_pause_menu()
             # Otherwise, open pause menu
             else:
+                print("[DEBUG] Opening pause menu")
                 self.show_pause_menu()
             return
         
