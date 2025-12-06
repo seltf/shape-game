@@ -537,22 +537,11 @@ class Game:
     def update(self):
         """Main render loop: updates visuals at 60 FPS (16ms)."""
         if not self.paused:
-            self.root.update()  # Flush all pending canvas operations and redraw
             # Increment interpolation factor (0.0 to 1.0 over 50ms logic tick)
             self.interpolation_factor = min(1.0, self.interpolation_factor + (16.0 / 50.0))
+            # Update player render position with interpolation
+            self.player.update_render_position(self.interpolation_factor)
         self.root.after(16, self.update)
-
-    def _render_frame(self):
-        """Render current frame with entity positions."""
-        # Player position
-        player_x, player_y = self.player.x, self.player.y
-        self.canvas.coords(self.player.rect, player_x-self.player.size//2, player_y-self.player.size//2, 
-                          player_x+self.player.size//2, player_y+self.player.size//2)
-        
-        # Update HUD
-        self.canvas.itemconfig(self.score_text, text=str(self.score))
-        self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
-        self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
 
     def update_logic(self):
         """Main game logic loop: updates game state at 20 FPS (50ms)."""

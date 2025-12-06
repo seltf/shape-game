@@ -263,6 +263,8 @@ class Player:
         self.shield_cooldown: int = 0  # Cooldown counter in milliseconds
         self.shield_rings: List[Optional[int]] = []  # List of canvas objects for shield rings (multiple rings for levels)
         self.shield_level: int = 0  # Current shield level (0-3)
+        self.prev_x: float = x  # Previous frame position for interpolation
+        self.prev_y: float = y
         self.rect: int = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
 
     def move(self, accel_x: float, accel_y: float, speed_boost: float = 0, window_width: Optional[int] = None, window_height: Optional[int] = None) -> None:
@@ -288,25 +290,33 @@ class Player:
         self.vx *= PLAYER_FRICTION
         self.vy *= PLAYER_FRICTION
         
+        # Store previous position for interpolation
+        self.prev_x = self.x
+        self.prev_y = self.y
+        
         # Update position
         self.x = max(self.size//2, min(window_width-self.size//2, self.x+self.vx))
         self.y = max(self.size//2, min(window_height-self.size//2, self.y+self.vy))
-        self.canvas.coords(self.rect, self.x-self.size//2, self.y-self.size//2, self.x+self.size//2, self.y+self.size//2)
-        
-        # Update shield ring position if active
-        # Update shield rings if active
-        if self.shield_rings:
-            for i, ring in enumerate(self.shield_rings):
-                if ring is not None:
-                    # Each ring is offset further out
-                    shield_radius = self.size // 2 + 15 + (i * 12)
-                    self.canvas.coords(ring, 
-                                      self.x - shield_radius, self.y - shield_radius,
-                                      self.x + shield_radius, self.y + shield_radius)
 
     def get_center(self) -> Tuple[float, float]:
         """Return the center coordinates of the player circle."""
         return self.x, self.y
+
+    def update_render_position(self, interpolation_factor: float) -> None:
+        """Interpolate and update rendered position based on interpolation factor (0.0 to 1.0)."""
+        interp_x = self.prev_x + (self.x - self.prev_x) * interpolation_factor
+        interp_y = self.prev_y + (self.y - self.prev_y) * interpolation_factor
+        self.canvas.coords(self.rect, interp_x-self.size//2, interp_y-self.size//2, 
+                          interp_x+self.size//2, interp_y+self.size//2)
+        
+        # Update shield rings if active
+        if self.shield_rings:
+            for i, ring in enumerate(self.shield_rings):
+                if ring is not None:
+                    shield_radius = self.size // 2 + 15 + (i * 12)
+                    self.canvas.coords(ring, 
+                                      interp_x - shield_radius, interp_y - shield_radius,
+                                      interp_x + shield_radius, interp_y + shield_radius)
 
     def activate_shield(self) -> None:
         """Activate the shield rings around the player based on shield level."""
