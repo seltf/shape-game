@@ -798,7 +798,7 @@ class Game:
         self.ammo_orbs = []
         
         # Update rotation angle
-        self.ammo_rotation = (self.ammo_rotation + 6) % 360  # Rotate 6 degrees per frame
+        self.ammo_rotation = (self.ammo_rotation + 2.4) % 360  # Rotate 2.4 degrees per frame (scaled for 50 FPS logic)
         rotation_rad = math.radians(self.ammo_rotation)
         
         # Draw ammo orbs - show all slots, but only fill available ones
