@@ -722,9 +722,10 @@ class Projectile:
         self.is_mini_fork: bool = False  # Whether this is a mini-fork that can only chain once
         self.max_distance: float = stats.get('attack_range', 500)  # Maximum distance before returning
         self.distance_traveled: float = 0  # Track distance from spawn point
-        # Base timeout is 500ms (original behavior)
-        # This is speed-independent so Rapid Fire upgrades don't extend range
-        self.timeout_ms: int = 500
+        # Base timeout is 500ms with base speed 16
+        # Scale timeout inversely with speed so faster projectiles return sooner, maintaining same range
+        base_speed = 16
+        self.timeout_ms: int = int(500 * (base_speed / self.speed))  # Faster speed = shorter timeout
 
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
