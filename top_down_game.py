@@ -935,9 +935,13 @@ class Game:
         )
 
     def attack(self):
-        """Launch a projectile if none are active."""
+        """Launch a projectile if none are active and cooldown is ready."""
         # Make sure we're not in a menu
         if self.paused or self.menu_manager.upgrade_menu_active:
+            return
+        
+        # Check cooldown - can't fire if cooldown isn't ready
+        if self.attack_cooldown > 0:
             return
         
         # Check if there's a main projectile active (mini-forks don't block firing)
