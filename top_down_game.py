@@ -98,9 +98,9 @@ class Game:
         # Start background music
         start_background_music(self)
         
-        # Schedule render loop at 120 FPS (~8ms) and logic loop at 20 FPS (50ms)
+        # Schedule render loop at 120 FPS (~8ms) and logic loop at 50 FPS (20ms)
         self.root.after(8, self.update)
-        self.root.after(50, self.schedule_logic_updates)
+        self.root.after(20, self.schedule_logic_updates)
         self.interpolation_factor = 0.0  # Track time within logic frame for smooth animation
 
     def _draw_starfield(self):
@@ -525,10 +525,10 @@ class Game:
         pass
 
     def schedule_logic_updates(self):
-        """Schedule the next logic update at 20 FPS (50ms) and respawn timer."""
+        """Schedule the next logic update at 50 FPS (20ms) and respawn timer."""
         self.update_logic()
         self.interpolation_factor = 0.0  # Reset for next logic tick
-        self.root.after(50, self.schedule_logic_updates)
+        self.root.after(20, self.schedule_logic_updates)
         # Schedule first respawn if not already scheduled
         if not hasattr(self, '_respawn_scheduled'):
             self.root.after(RESPAWN_INTERVAL, self.on_respawn_timer)
@@ -537,24 +537,26 @@ class Game:
     def update(self):
         """Main render loop: updates visuals at 120 FPS (~8ms)."""
         if not self.paused:
-            # Increment interpolation factor (0.0 to 1.0 over 50ms logic tick)
-            self.interpolation_factor = min(1.0, self.interpolation_factor + (8.0 / 50.0))
+            # Increment interpolation factor (0.0 to 1.0 over 20ms logic tick)
+            self.interpolation_factor = min(1.0, self.interpolation_factor + (8.0 / 20.0))
             # Update player render position with interpolation
             self.player.update_render_position(self.interpolation_factor)
+            # Force canvas redraw
+            self.canvas.update_idletasks()
         self.root.after(8, self.update)
 
     def update_logic(self):
-        """Main game logic loop: updates game state at 20 FPS (50ms)."""
+        """Main game logic loop: updates game state at 50 FPS (20ms)."""
         if self.paused:
             return
         
         try:
             # Track time played
-            self.game_time_ms += 50
+            self.game_time_ms += 20
             
             # Update attack cooldown
             if self.attack_cooldown > 0:
-                self.attack_cooldown -= 50
+                self.attack_cooldown -= 20
             
             # Auto-fire if enabled and cooldown is ready
             if self.auto_fire_enabled and self.attack_cooldown <= 0:

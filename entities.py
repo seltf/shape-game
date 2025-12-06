@@ -35,7 +35,7 @@ class BlackHole:
     
     def update(self) -> bool:
         """Update black hole and check for detonation."""
-        self.time_alive += 50  # Update is called every 50ms
+        self.time_alive += 20  # Update is called every 20ms
         
         # Immediately start detonation (no travel phase for weapon version)
         if not self.detonation_phase:
@@ -629,7 +629,7 @@ class Shard:
     
     def update(self) -> bool:
         """Update shard position and lifetime, check for enemy collisions."""
-        self.time_alive += 50  # Update is called every 50ms
+        self.time_alive += 20  # Update is called every 20ms
         
         # Update position
         self.x += self.vx
@@ -740,7 +740,7 @@ class Projectile:
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
         # Track lifetime
-        self.time_alive += 50  # Update is called every 50ms
+        self.time_alive += 20  # Update is called every 20ms
         
         # If not already returning, check if time limit exceeded
         if not self.returning and self.time_alive >= self.timeout_ms:
@@ -1486,7 +1486,7 @@ class MinionProjectile:
     def update(self) -> bool:
         """Update projectile position and check for collisions. Returns False if projectile should despawn."""
         # Track lifetime
-        self.time_alive += 50  # Update is called every 50ms
+        self.time_alive += 20  # Update is called every 20ms
         
         # Despawn if lifetime exceeded
         if self.time_alive >= self.max_lifetime:
