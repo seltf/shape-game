@@ -146,7 +146,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
+                elif key in ['projectile_speed', 'attack_cooldown', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -963,8 +963,10 @@ class Game:
         projectile.homing_strength = self.computed_weapon_stats['homing']
         self.projectiles.append(projectile)
         
-        # Set attack cooldown (500ms from PROJECTILE_RETURN_TIME_MS)
-        self.attack_cooldown = PROJECTILE_RETURN_TIME_MS
+        # Set attack cooldown from weapon stats (supports fire rate upgrades)
+        self.attack_cooldown = self.computed_weapon_stats['attack_cooldown']
+        # Clamp to minimum 100ms to prevent spam
+        self.attack_cooldown = max(100, self.attack_cooldown)
 
 if __name__ == '__main__':
     root = tk.Tk()
