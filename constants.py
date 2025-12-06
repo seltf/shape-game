@@ -36,7 +36,7 @@ MAX_ENEMY_COUNT: int = 150  # Maximum enemies allowed
 RESPAWN_BATCH_SIZE: int = 20  # Enemies to spawn per batch
 RESPAWN_INTERVAL: int = 10000  # Milliseconds between batches (10 seconds)
 RESPAWN_INTERVAL_MIN: int = 3000  # Minimum interval at high difficulty (3 seconds)
-RESPAWN_BATCH_SCALE: int = 2  # Milliseconds to reduce interval per minute played
+RESPAWN_BATCH_SCALE: float = 0.8  # Milliseconds to reduce interval per minute played (scaled for 50 FPS logic: was 2, now 0.8)
 
 # ============================================================================
 # PROJECTILE & WEAPON CONFIGURATION
