@@ -724,10 +724,9 @@ class Projectile:
         self.distance_traveled: float = 0  # Track distance from spawn point
         self.spawn_x: float = x  # Store spawn position
         self.spawn_y: float = y  # Store spawn position
-        # Calculate timeout based on max_distance and BASE speed (16)
-        # This ensures timeout is independent of speed upgrades
-        base_speed = 16
-        self.timeout_ms: int = int((self.max_distance / base_speed) * 50)  # Time to reach max_distance at base speed
+        # Base timeout is 500ms (original behavior)
+        # This is speed-independent so Rapid Fire upgrades don't extend range
+        self.timeout_ms: int = 500
 
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
