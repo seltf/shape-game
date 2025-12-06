@@ -146,7 +146,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'attack_cooldown', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
+                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
@@ -935,13 +935,9 @@ class Game:
         )
 
     def attack(self):
-        """Launch a projectile if none are active and cooldown is ready."""
+        """Launch a projectile if none are active."""
         # Make sure we're not in a menu
         if self.paused or self.menu_manager.upgrade_menu_active:
-            return
-        
-        # Check cooldown - can't fire if cooldown isn't ready
-        if self.attack_cooldown > 0:
             return
         
         # Check if there's a main projectile active (mini-forks don't block firing)
@@ -966,11 +962,6 @@ class Game:
         # Set homing from weapon stats (0 by default, 0.15 if Homing upgrade owned)
         projectile.homing_strength = self.computed_weapon_stats['homing']
         self.projectiles.append(projectile)
-        
-        # Set attack cooldown from weapon stats (supports fire rate upgrades)
-        self.attack_cooldown = self.computed_weapon_stats['attack_cooldown']
-        # Clamp to minimum 50ms to allow for reasonable fire rate scaling
-        self.attack_cooldown = max(50, self.attack_cooldown)
 
 if __name__ == '__main__':
     root = tk.Tk()
