@@ -462,12 +462,11 @@ class MenuManager:
         buttons = [
             ('Add Ricochet', 'upgrade_extra_bounce', '#4a4a8a'),
             ('Add Shrapnel', 'upgrade_shrapnel', '#4a4a8a'),
-            ('Add Speed Boost', 'upgrade_speed_boost', '#4a4a8a'),
+            ('Add Rapid Fire', 'upgrade_rapid_fire', '#4a4a8a'),
             ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
             ('Add Black Hole', 'upgrade_black_hole', '#4a4a8a'),
             ('Add Homing', 'upgrade_homing', '#4a4a8a'),
             ('Add Shield', 'upgrade_shield', '#4a4a8a'),
-            ('Add Attack Range', 'upgrade_attack_range', '#4a4a8a'),
             ('Summon Minion', 'upgrade_summon_minion', '#4a4a8a'),
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
@@ -511,8 +510,8 @@ class MenuManager:
                 self.game.add_upgrade('extra_bounce')
             elif action == 'upgrade_shrapnel':
                 self.game.add_upgrade('shrapnel')
-            elif action == 'upgrade_speed_boost':
-                self.game.add_upgrade('speed_boost')
+            elif action == 'upgrade_rapid_fire':
+                self.game.add_upgrade('rapid_fire')
             elif action == 'upgrade_chain_lightning':
                 self.game.add_upgrade('chain_lightning')
             elif action == 'upgrade_black_hole':
@@ -521,8 +520,6 @@ class MenuManager:
                 self.game.add_upgrade('homing')
             elif action == 'upgrade_shield':
                 self.game.add_upgrade('shield')
-            elif action == 'upgrade_attack_range':
-                self.game.add_upgrade('attack_range')
             elif action == 'upgrade_summon_minion':
                 self.game.add_upgrade('summon_minion')
             elif action == 'level_up':
