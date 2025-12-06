@@ -98,8 +98,8 @@ class Game:
         # Start background music
         start_background_music(self)
         
-        # Schedule render loop at 60 FPS (16ms) and logic loop at 20 FPS (50ms)
-        self.root.after(16, self.update)
+        # Schedule render loop at 120 FPS (~8ms) and logic loop at 20 FPS (50ms)
+        self.root.after(8, self.update)
         self.root.after(50, self.schedule_logic_updates)
         self.interpolation_factor = 0.0  # Track time within logic frame for smooth animation
 
@@ -535,13 +535,13 @@ class Game:
             self._respawn_scheduled = True
 
     def update(self):
-        """Main render loop: updates visuals at 60 FPS (16ms)."""
+        """Main render loop: updates visuals at 120 FPS (~8ms)."""
         if not self.paused:
             # Increment interpolation factor (0.0 to 1.0 over 50ms logic tick)
-            self.interpolation_factor = min(1.0, self.interpolation_factor + (16.0 / 50.0))
+            self.interpolation_factor = min(1.0, self.interpolation_factor + (8.0 / 50.0))
             # Update player render position with interpolation
             self.player.update_render_position(self.interpolation_factor)
-        self.root.after(16, self.update)
+        self.root.after(8, self.update)
 
     def update_logic(self):
         """Main game logic loop: updates game state at 20 FPS (50ms)."""
