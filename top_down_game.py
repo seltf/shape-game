@@ -611,7 +611,7 @@ class Game:
         """Create a poof particle effect at (x, y)."""
         for i in range(PARTICLE_COUNT):
             angle = (2 * math.pi * i) / PARTICLE_COUNT
-            speed = 3
+            speed = 1.2  # Scaled for 50 FPS logic
             vx = math.cos(angle) * speed
             vy = math.sin(angle) * speed
             particle = Particle(self.canvas, x, y, vx, vy, PARTICLE_LIFE)
@@ -639,7 +639,7 @@ class Game:
             angle = start_angle + (spread_angle * i / (shard_count - 1)) if shard_count > 1 else proj_angle
             
             # Shard speed
-            shard_speed = 8
+            shard_speed = 3.2  # Scaled for 50 FPS logic
             vx = math.cos(angle) * shard_speed
             vy = math.sin(angle) * shard_speed
             
@@ -651,7 +651,7 @@ class Game:
         # Scale explosion size based on upgrade level
         explosive_level = self.computed_weapon_stats.get('explosive_shrapnel', 0)
         shard_count = 3 + (2 * explosive_level)  # 5 at level 1, 7 at level 2, 9 at level 3, etc (small poof to bigger)
-        shard_speed = 4 + (1.5 * explosive_level)  # 5.5 at level 1, 7 at level 2, 8.5 at level 3, etc
+        shard_speed = 1.6 + (0.6 * explosive_level)  # Scaled for 50 FPS logic
         
         # Play deep boom sound
         play_beep_async(120, 200, self)  # Low frequency (120Hz), long duration (200ms)
@@ -857,11 +857,11 @@ class Game:
         for enemy in self.enemies:
             # Different speeds for different enemy types
             if isinstance(enemy, PentagonEnemy):
-                enemy.move_towards(px, py, speed=3)  # Pentagons move slower
+                enemy.move_towards(px, py, speed=1)  # Pentagons move slower
             elif isinstance(enemy, TriangleEnemy):
-                enemy.move_towards(px, py, speed=4)  # Triangles medium speed
+                enemy.move_towards(px, py, speed=2)  # Triangles medium speed
             else:  # CircleEnemy
-                enemy.move_towards(px, py, speed=5)  # Circles normal speed
+                enemy.move_towards(px, py, speed=2)  # Circles normal speed
 
     def check_player_collision(self) -> None:
         """Check if any enemy collides with player and deal damage."""

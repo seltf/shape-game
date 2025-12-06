@@ -173,7 +173,7 @@ class BlackHole:
         play_sound_async('black_hole_detonate', 80, 200, self.game)
         
         # Apply effects to all enemies in the radius
-        fling_speed = 12  # Speed to fling enemies outward
+        fling_speed = 4.8  # Speed to fling enemies outward (scaled for 50 FPS logic)
         
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
@@ -1241,7 +1241,7 @@ class Minion:
         self.vx: float = 0  # Velocity x
         self.vy: float = 0  # Velocity y
         self.size: int = minion_size
-        self.max_speed: int = 4  # Slightly slower than player
+        self.max_speed: int = 2  # Slightly slower than player (scaled for 50 FPS logic)
         self.follow_distance: int = 100  # Max distance from player to maintain follow
         self.aggro_range: int = 150  # Range to detect enemies for engagement
         self.aggro_drop_distance: int = 250  # Distance from player to drop aggro and return
@@ -1261,7 +1261,7 @@ class Minion:
         """Update minion position and attack logic. Returns True if minion should persist."""
         # Update attack cooldown
         if self.attack_cooldown > 0:
-            self.attack_cooldown -= 50  # Update is called every 50ms
+            self.attack_cooldown -= 20  # Update is called every 20ms
         
         # Get player position
         px, py = self.game.player.get_center()
