@@ -724,13 +724,10 @@ class Projectile:
         self.distance_traveled: float = 0  # Track distance from spawn point
         self.spawn_x: float = x  # Store spawn position
         self.spawn_y: float = y  # Store spawn position
-        # Calculate timeout: use extended timeout only if attack_range upgraded beyond base
-        # Base timeout: 500ms (0.5 seconds - original behavior)
-        # If attack_range > 500, scale timeout based on distance
-        if self.max_distance > 500:
-            self.timeout_ms: int = int((self.max_distance / self.speed) * 50 * 1.5)  # 1.5x safety multiplier
-        else:
-            self.timeout_ms: int = 500  # Base timeout unchanged
+        # Calculate timeout based on max_distance and BASE speed (16)
+        # This ensures timeout is independent of speed upgrades
+        base_speed = 16
+        self.timeout_ms: int = int((self.max_distance / base_speed) * 50)  # Time to reach max_distance at base speed
 
     def update(self) -> bool:
         """Update projectile position and check for collisions."""
