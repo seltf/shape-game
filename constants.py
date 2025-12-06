@@ -73,7 +73,7 @@ WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
-    'rapid_fire': {'return_speed': 10, 'name': 'Rapid Fire'},  # Increases return speed by 10 px/frame
+    'rapid_fire': {'projectile_speed': 4, 'return_speed': 5, 'name': 'Rapid Fire'},  # Faster projectiles and returns
     'summon_minion': {'name': 'Summon Minion', 'description': 'Spawn a friendly minion that attacks enemies'},
 }
 
