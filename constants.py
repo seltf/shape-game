@@ -57,6 +57,7 @@ EXPLOSION_RADIUS: int = 100  # Pixels for explosion damage radius
 # ============================================================================
 WEAPON_STATS: Dict[str, Any] = {
     'projectile_speed': 16,
+    'return_speed': 20,  # Speed at which projectiles return to player
     'homing': 0,
     'bounces': 0,
     'splits': True,
@@ -72,7 +73,7 @@ WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
-    'rapid_fire': {'projectile_speed': 4, 'name': 'Rapid Fire'},  # Increases projectile speed by 4 pixels/frame
+    'rapid_fire': {'return_speed': 10, 'name': 'Rapid Fire'},  # Increases return speed by 10 px/frame
     'summon_minion': {'name': 'Summon Minion', 'description': 'Spawn a friendly minion that attacks enemies'},
 }
 

@@ -713,6 +713,7 @@ class Projectile:
         self.shrapnel_level: int = stats.get('shrapnel', 0)
         self.homing_strength: float = stats.get('homing', 0.15)
         self.speed: int = stats.get('projectile_speed', 16)  # Use weapon stat speed, not calculated speed
+        self.return_speed: int = stats.get('return_speed', 20)  # Speed at which projectile returns to player
         self.chain_lightning_level: int = stats.get('chain_lightning', 0)  # Chain lightning upgrade level
         self.black_hole_level: int = stats.get('black_hole', 0)  # Black hole upgrade level
         self.current_target: Optional[Any] = self._find_closest_target()  # Initial target for homing
@@ -751,9 +752,8 @@ class Projectile:
             if dist < 15:  # Reached player (increased from 10)
                 return False
             
-            # Move towards player at smooth speed (reduced from 50 to 20 for more frames)
-            return_speed = 20
-            move_distance = min(return_speed, dist)  # Don't move more than distance to player
+            # Move towards player at return speed (upgradeable via weapon stats)
+            move_distance = min(self.return_speed, dist)  # Don't move more than distance to player
             if dist > 0:
                 self.x += (dx / dist) * move_distance
                 self.y += (dy / dist) * move_distance

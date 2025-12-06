@@ -146,7 +146,7 @@ class Game:
                 if key == 'splits':
                     # Override splits directly
                     stats['splits'] = value
-                elif key in ['projectile_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
+                elif key in ['projectile_speed', 'return_speed', 'homing', 'bounces', 'shrapnel', 'explosive_shrapnel', 'chain_lightning', 'black_hole', 'shield']:
                     # Add to base values
                     if key not in stats:
                         stats[key] = 0
