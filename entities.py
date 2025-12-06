@@ -722,8 +722,6 @@ class Projectile:
         self.is_mini_fork: bool = False  # Whether this is a mini-fork that can only chain once
         self.max_distance: float = stats.get('attack_range', 500)  # Maximum distance before returning
         self.distance_traveled: float = 0  # Track distance from spawn point
-        self.spawn_x: float = x  # Store spawn position
-        self.spawn_y: float = y  # Store spawn position
         # Base timeout is 500ms (original behavior)
         # This is speed-independent so Rapid Fire upgrades don't extend range
         self.timeout_ms: int = 500
@@ -778,23 +776,10 @@ class Projectile:
         # Calculate movement distance
         movement_dist = math.hypot(self.vx, self.vy)
         
-        # Calculate distance from spawn point
-        dist_from_spawn = math.hypot(self.x - self.spawn_x, self.y - self.spawn_y)
-        
-        # Check if movement would exceed max distance from spawn
-        if not self.returning and dist_from_spawn + movement_dist > self.max_distance:
-            # Clamp movement to stay within max_distance from spawn
-            remaining_distance = self.max_distance - dist_from_spawn
-            if remaining_distance > 0:
-                scale_factor = remaining_distance / movement_dist
-                self.x += self.vx * scale_factor
-                self.y += self.vy * scale_factor
-            self.returning = True
-        else:
-            # Normal movement
-            self.x += self.vx
-            self.y += self.vy
-            self.distance_traveled += movement_dist
+        # Normal movement
+        self.x += self.vx
+        self.y += self.vy
+        self.distance_traveled += movement_dist
         
         self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
         
