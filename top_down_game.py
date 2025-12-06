@@ -101,6 +101,7 @@ class Game:
         # Schedule render loop at 60 FPS (16ms) and logic loop at 20 FPS (50ms)
         self.root.after(16, self.update)
         self.root.after(50, self.schedule_logic_updates)
+        self.interpolation_factor = 0.0  # Track time within logic frame for smooth animation
 
     def _draw_starfield(self):
         """Draw a starfield background with randomly positioned stars."""
@@ -526,6 +527,7 @@ class Game:
     def schedule_logic_updates(self):
         """Schedule the next logic update at 20 FPS (50ms) and respawn timer."""
         self.update_logic()
+        self.interpolation_factor = 0.0  # Reset for next logic tick
         self.root.after(50, self.schedule_logic_updates)
         # Schedule first respawn if not already scheduled
         if not hasattr(self, '_respawn_scheduled'):
@@ -535,8 +537,22 @@ class Game:
     def update(self):
         """Main render loop: updates visuals at 60 FPS (16ms)."""
         if not self.paused:
-            self.canvas.update()  # Redraw canvas
+            self.root.update()  # Flush all pending canvas operations and redraw
+            # Increment interpolation factor (0.0 to 1.0 over 50ms logic tick)
+            self.interpolation_factor = min(1.0, self.interpolation_factor + (16.0 / 50.0))
         self.root.after(16, self.update)
+
+    def _render_frame(self):
+        """Render current frame with entity positions."""
+        # Player position
+        player_x, player_y = self.player.x, self.player.y
+        self.canvas.coords(self.player.rect, player_x-self.player.size//2, player_y-self.player.size//2, 
+                          player_x+self.player.size//2, player_y+self.player.size//2)
+        
+        # Update HUD
+        self.canvas.itemconfig(self.score_text, text=str(self.score))
+        self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
+        self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
 
     def update_logic(self):
         """Main game logic loop: updates game state at 20 FPS (50ms)."""
