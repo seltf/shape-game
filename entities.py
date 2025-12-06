@@ -751,8 +751,8 @@ class Projectile:
             if dist < 15:  # Reached player (increased from 10)
                 return False
             
-            # Move towards player at fast speed, but don't overshoot
-            return_speed = 50
+            # Move towards player at smooth speed (reduced from 50 to 20 for more frames)
+            return_speed = 20
             move_distance = min(return_speed, dist)  # Don't move more than distance to player
             if dist > 0:
                 self.x += (dx / dist) * move_distance

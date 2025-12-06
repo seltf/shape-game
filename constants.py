@@ -49,7 +49,7 @@ COLLISION_DISTANCE: int = 30  # Distance for projectile-enemy collision
 COLLISION_DISTANCE_SQ: int = COLLISION_DISTANCE ** 2  # Pre-calculated squared distance for sqrt elimination
 PROJECTILE_SPLIT_ANGLE: int = 30  # Degrees to split projectiles on each bounce
 PROJECTILE_LIFETIME: int = 10000  # Milliseconds before projectile explodes
-PROJECTILE_RETURN_TIME_MS: int = 500  # Time before projectile returns to player
+PROJECTILE_RETURN_TIME_MS: int = 800  # Time before projectile returns to player (increased for smoother animation)
 EXPLOSION_RADIUS: int = 100  # Pixels for explosion damage radius
 
 # ============================================================================
