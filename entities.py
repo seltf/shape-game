@@ -1234,7 +1234,7 @@ class Minion:
         self.vy: float = 0  # Velocity y
         self.size: int = minion_size
         self.max_speed: int = 4  # Slightly slower than player
-        self.follow_distance: int = 80  # Max distance from player to maintain follow
+        self.follow_distance: int = 100  # Max distance from player to maintain follow
         self.aggro_range: int = 150  # Range to detect enemies for engagement
         self.aggro_drop_distance: int = 250  # Distance from player to drop aggro and return
         self.attack_range: int = 120  # Distance to engage enemies
