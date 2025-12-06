@@ -98,9 +98,9 @@ class Game:
         # Start background music
         start_background_music(self)
         
-        self.root.after(50, self.update)
-        # Schedule first respawn
-        self.root.after(RESPAWN_INTERVAL, self.on_respawn_timer)
+        # Schedule render loop at 60 FPS (16ms) and logic loop at 20 FPS (50ms)
+        self.root.after(16, self.update)
+        self.root.after(50, self.schedule_logic_updates)
 
     def _draw_starfield(self):
         """Draw a starfield background with randomly positioned stars."""
@@ -523,10 +523,24 @@ class Game:
         """Optional: could resume game when window regains focus, but keeping paused is safer."""
         pass
 
+    def schedule_logic_updates(self):
+        """Schedule the next logic update at 20 FPS (50ms) and respawn timer."""
+        self.update_logic()
+        self.root.after(50, self.schedule_logic_updates)
+        # Schedule first respawn if not already scheduled
+        if not hasattr(self, '_respawn_scheduled'):
+            self.root.after(RESPAWN_INTERVAL, self.on_respawn_timer)
+            self._respawn_scheduled = True
+
     def update(self):
-        """Main game loop: update movement, enemies, and schedule next frame."""
+        """Main render loop: updates visuals at 60 FPS (16ms)."""
+        if not self.paused:
+            self.canvas.update()  # Redraw canvas
+        self.root.after(16, self.update)
+
+    def update_logic(self):
+        """Main game logic loop: updates game state at 20 FPS (50ms)."""
         if self.paused:
-            self.root.after(50, self.update)
             return
         
         try:
@@ -558,8 +572,6 @@ class Game:
             import traceback
             sys.stdout.write(traceback.format_exc())
             sys.stdout.flush()
-        
-        self.root.after(50, self.update)
 
     def handle_player_movement(self):
         """Check pressed keys and apply acceleration accordingly."""
