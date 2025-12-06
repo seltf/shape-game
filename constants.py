@@ -20,10 +20,10 @@ HEIGHT: int = 400
 # PLAYER CONFIGURATION
 # ============================================================================
 PLAYER_SIZE: int = 20
-PLAYER_ACCELERATION: float = 1.4  # How quickly player accelerates (scaled for 50 FPS logic)
-PLAYER_MAX_SPEED: int = 2  # Maximum player speed (scaled for 50 FPS logic)
+PLAYER_ACCELERATION: float = 2.0  # How quickly player accelerates (scaled for 50 FPS logic)
+PLAYER_MAX_SPEED: int = 3  # Maximum player speed (scaled for 50 FPS logic)
 PLAYER_FRICTION: float = 0.70  # Friction multiplier (0-1, lower = more friction)
-DASH_DISTANCE: int = 24  # How far the dash moves the player (scaled for 50 FPS logic)
+DASH_DISTANCE: int = 30  # How far the dash moves the player (scaled for 50 FPS logic)
 DASH_COOLDOWN: int = 500  # Milliseconds between dashes
 
 # ============================================================================
