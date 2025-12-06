@@ -1286,7 +1286,7 @@ class Minion:
                     # Target is too far from player, drop aggro and return
                     self.current_target = None
         
-        # If no current target, look for enemies in aggro range
+        # If no current target, look for enemies in aggro range (around player, not minion)
         if not self.current_target:
             closest_enemy = None
             closest_dist_sq = self.aggro_range * self.aggro_range
@@ -1296,8 +1296,9 @@ class Minion:
                 ex_center = ex + ENEMY_SIZE_HALF
                 ey_center = ey + ENEMY_SIZE_HALF
                 
-                dx = ex_center - self.x
-                dy = ey_center - self.y
+                # Check distance from PLAYER, not minion
+                dx = ex_center - px
+                dy = ey_center - py
                 dist_sq = dx * dx + dy * dy
                 
                 if dist_sq < closest_dist_sq:
