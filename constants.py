@@ -69,11 +69,9 @@ WEAPON_STATS: Dict[str, Any] = {
 WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'extra_bounce': {'bounces': 1, 'name': 'Ricochet'},
     'shrapnel': {'shrapnel': 1, 'name': 'Shrapnel'},
-    'speed_boost': {'projectile_speed': 3, 'name': 'Speed Boost'},
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
-    'attack_range': {'attack_range': 250, 'name': 'Attack Range'},
     'summon_minion': {'name': 'Summon Minion', 'description': 'Spawn a friendly minion that attacks enemies'},
 }
 
@@ -86,7 +84,7 @@ LINKED_UPGRADES: Dict[str, Dict[str, Any]] = {
     },
     'chain_lightning': {
         'name': 'Chain Lightning',
-        'requires': ['speed_boost', 'extra_bounce'],  # Multiple prerequisites
+        'requires': ['extra_bounce'],  # Changed from speed_boost to extra_bounce
         'modifiers': {'chain_lightning': 1}
     }
 }
