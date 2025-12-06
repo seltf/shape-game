@@ -4,6 +4,11 @@ Game constants - centralized configuration for Top Down Game
 from typing import Dict, Any
 
 # ============================================================================
+# VERSION
+# ============================================================================
+VERSION: str = "1.0.0"  # Game version number
+
+# ============================================================================
 # DISPLAY & WINDOW
 # ============================================================================
 TESTING_MODE: bool = False  # Set to True to spawn many enemies for testing weapons

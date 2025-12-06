@@ -1,6 +1,7 @@
 @echo off
 REM Shape-Game - Build Executable
 REM This script creates a standalone .exe file using PyInstaller
+REM Build Version: 1.0.0
 
 setlocal enabledelayedexpansion
 
@@ -19,7 +20,7 @@ if exist yoyo-game.spec del yoyo-game.spec
 echo.
 echo Building executable...
 REM PyInstaller with all necessary modules from refactored structure
-"%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "yoyo-game" ^
+"%PYTHON_EXE%" -m PyInstaller --onefile --windowed --name "shape-game" ^
     --icon=NONE ^
     --add-data "sounds;sounds" ^
     --hidden-import=entities ^
@@ -37,7 +38,7 @@ echo.
 if exist dist\yoyo-game.exe (
     echo.
     echo ========================================
-    echo Build complete!
+    echo Build complete! (v1.0.0)
     echo Your game is in: dist\yoyo-game.exe
     echo ========================================
 ) else (

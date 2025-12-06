@@ -42,6 +42,7 @@ class Game:
         
         self.score = 0
         self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
+        self.version_text = self.canvas.create_text(10, self.window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
         self.player = Player(self.canvas, self.window_width//2, self.window_height//2, PLAYER_SIZE)
         self.player.game = self  # Give player reference to game instance for shield pushback
         
@@ -438,6 +439,7 @@ class Game:
         self.enemies = []
         self.spawn_enemies()
         self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
+        self.version_text = self.canvas.create_text(10, HEIGHT - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
         self.level_text = self.canvas.create_text(WIDTH//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
         self.xp_text = self.canvas.create_text(WIDTH//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
         
