@@ -313,13 +313,25 @@ class Game:
     def on_canvas_click(self, event):
         """Handle canvas clicks - routes to appropriate menu or attack."""
         try:
+            # Convert screen coordinates to canvas coordinates properly
+            # event.x and event.y are already in canvas coordinates when bound to canvas
+            click_x = event.x
+            click_y = event.y
+            
+            # Debug logging for built exe issues
+            import sys
+            sys.stdout.write(f"[DEBUG] Click received: canvas=({click_x}, {click_y}), canvas_size=({self.window_width}, {self.window_height})\n")
+            sys.stdout.flush()
+            
             # If game over screen is showing, handle restart button click
             if self.game_over_active:
                 if self.game_over_restart_btn is not None:
                     coords = self.canvas.coords(self.game_over_restart_btn)
                     if coords and len(coords) >= 4:
                         x1, y1, x2, y2 = coords
-                        if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                        sys.stdout.write(f"[DEBUG] Game over button coords: ({x1}, {y1}, {x2}, {y2})\n")
+                        sys.stdout.flush()
+                        if x1 <= click_x <= x2 and y1 <= click_y <= y2:
                             self.restart_game()
                             return
                 return  # Click outside button does nothing
