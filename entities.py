@@ -1308,12 +1308,13 @@ class Minion:
             if closest_enemy:
                 self.current_target = closest_enemy
         
-        # Calculate repulsion from other minions
+        # Calculate repulsion from other minions and enemies
         repulsion_x = 0.0
         repulsion_y = 0.0
-        min_distance = 40  # Minions try to stay this far apart
+        min_distance = 40  # Minions try to stay this far apart from other minions
         repulsion_strength = 0.15  # How strong the repulsion is
         
+        # Repulsion from other minions
         for other_minion in self.game.minions:
             if other_minion is self:
                 continue
@@ -1328,6 +1329,24 @@ class Minion:
                 # Direction away from other minion
                 repulsion_x += (dx_other / dist_to_other) * repulsion_strength
                 repulsion_y += (dy_other / dist_to_other) * repulsion_strength
+        
+        # Repulsion from enemies (push minions away from hostile enemies)
+        enemy_min_distance = 50  # Keep distance from enemies
+        enemy_repulsion_strength = 0.25  # Stronger repulsion from enemies
+        
+        for enemy in self.game.enemies:
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            dx_enemy = self.x - ex_center
+            dy_enemy = self.y - ey_center
+            dist_to_enemy = math.hypot(dx_enemy, dy_enemy)
+            
+            # If too close to an enemy, push away
+            if dist_to_enemy < enemy_min_distance and dist_to_enemy > 0:
+                # Direction away from enemy
+                repulsion_x += (dx_enemy / dist_to_enemy) * enemy_repulsion_strength
+                repulsion_y += (dy_enemy / dist_to_enemy) * enemy_repulsion_strength
         
         # Apply repulsion to velocity
         self.vx += repulsion_x
