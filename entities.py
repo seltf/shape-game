@@ -1251,6 +1251,13 @@ class Minion:
         self.attack_cooldown_reset: int = 600  # Attack every 600ms
         self.current_target: Optional[Any] = None  # Current enemy being engaged
         
+        # Patrol behavior - minions wander around when near player but idle
+        self.patrol_timer: int = 0  # Countdown to next patrol waypoint change
+        self.patrol_interval: int = random.randint(2000, 4000)  # Time between patrol waypoint changes (2-4 seconds, randomized)
+        self.patrol_waypoint_x: float = x  # Current patrol target x
+        self.patrol_waypoint_y: float = y  # Current patrol target y
+        self.patrol_radius: int = 60  # How far from player's last known position to patrol
+        
         # Visual representation - green circle for minion
         self.rect: int = self.canvas.create_oval(
             x - self.size // 2, y - self.size // 2,
@@ -1383,9 +1390,8 @@ class Minion:
                 self.vx += (target_vx - self.vx) * 0.2
                 self.vy += (target_vy - self.vy) * 0.2
             else:
-                # Close enough to player, apply friction
-                self.vx *= 0.85
-                self.vy *= 0.85
+                # Close enough to player: patrol behavior instead of standing still
+                self._update_patrol(px, py)
         
         # Clamp velocity to max speed
         speed = math.hypot(self.vx, self.vy)
@@ -1468,6 +1474,48 @@ class Minion:
             
             # Play attack sound
             play_beep_async(500, 15, self.game)
+
+    def _update_patrol(self, player_x: float, player_y: float) -> None:
+        """Update patrol behavior when minion is idle near player."""
+        # Decrement patrol timer
+        self.patrol_timer -= 20  # Called every 20ms
+        
+        # If timer expired, pick new patrol waypoint
+        if self.patrol_timer <= 0:
+            # Randomize next waypoint around player
+            angle = random.uniform(0, 2 * math.pi)
+            distance = random.uniform(20, self.patrol_radius)
+            
+            self.patrol_waypoint_x = player_x + math.cos(angle) * distance
+            self.patrol_waypoint_y = player_y + math.sin(angle) * distance
+            
+            # Clamp waypoint to screen bounds
+            margin = 30
+            self.patrol_waypoint_x = max(margin, min(self.patrol_waypoint_x, self.game.window_width - margin))
+            self.patrol_waypoint_y = max(margin, min(self.patrol_waypoint_y, self.game.window_height - margin))
+            
+            # Reset timer with new random interval for individuality
+            self.patrol_interval = random.randint(1500, 3500)  # Vary the patrol speed
+            self.patrol_timer = self.patrol_interval
+        
+        # Move towards current patrol waypoint
+        dx_to_waypoint = self.patrol_waypoint_x - self.x
+        dy_to_waypoint = self.patrol_waypoint_y - self.y
+        dist_to_waypoint = math.hypot(dx_to_waypoint, dy_to_waypoint)
+        
+        if dist_to_waypoint > 0:
+            # Move slowly towards waypoint (slower than following player)
+            patrol_speed = self.max_speed * 0.6  # 60% of normal speed
+            patrol_vx = (dx_to_waypoint / dist_to_waypoint) * patrol_speed
+            patrol_vy = (dy_to_waypoint / dist_to_waypoint) * patrol_speed
+            
+            # Blend velocity smoothly
+            self.vx += (patrol_vx - self.vx) * 0.15
+            self.vy += (patrol_vy - self.vy) * 0.15
+        else:
+            # At waypoint, apply slight friction
+            self.vx *= 0.9
+            self.vy *= 0.9
 
     def cleanup(self) -> None:
         """Remove minion from canvas."""
