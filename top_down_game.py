@@ -965,8 +965,8 @@ class Game:
         
         # Set attack cooldown from weapon stats (supports fire rate upgrades)
         self.attack_cooldown = self.computed_weapon_stats['attack_cooldown']
-        # Clamp to minimum 100ms to prevent spam
-        self.attack_cooldown = max(100, self.attack_cooldown)
+        # Clamp to minimum 50ms to allow for reasonable fire rate scaling
+        self.attack_cooldown = max(50, self.attack_cooldown)
 
 if __name__ == '__main__':
     root = tk.Tk()

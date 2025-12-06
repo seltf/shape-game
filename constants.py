@@ -73,7 +73,7 @@ WEAPON_UPGRADES: Dict[str, Dict[str, Any]] = {
     'black_hole': {'black_hole': 1, 'name': 'Black Hole'},
     'homing': {'homing': 0.35, 'name': 'Homing', 'one_time': True},
     'shield': {'shield': 1, 'name': 'Shield'},
-    'rapid_fire': {'attack_cooldown': -200, 'name': 'Rapid Fire'},  # Reduces cooldown by 200ms
+    'rapid_fire': {'attack_cooldown': -100, 'name': 'Rapid Fire'},  # Reduces cooldown by 100ms per stack
     'summon_minion': {'name': 'Summon Minion', 'description': 'Spawn a friendly minion that attacks enemies'},
 }
 
