@@ -53,15 +53,12 @@ class Game:
         self.minions = []  # Track friendly minions
         self.minion_projectiles = []  # Track minion projectiles
         self.game_time_ms = 0  # Track time played in milliseconds
-        self.last_dash_dx = 1  # Default dash direction (right)
-        self.last_dash_dy = 0
         self.active_upgrades = []  # List of active upgrade keys
         self.computed_weapon_stats = self.compute_weapon_stats()  # Cache computed stats
         
         # Activate initial shield if shield upgrade is owned
         self._update_player_shield()
         
-        self.dash_cooldown_counter = 0
         self.last_move_dx = 1  # Track last movement direction
         self.last_move_dy = 0
         self.xp = 0  # Current XP
@@ -423,7 +420,6 @@ class Game:
         
         self.score = 0
         self.game_time_ms = 0
-        self.dash_cooldown_counter = 0
         self.particles.clear()
         self.shards.clear()
         self.projectiles.clear()
@@ -572,7 +568,6 @@ class Game:
             self.update_minions()  # Update friendly minions
             self.update_minion_projectiles()  # Update minion projectiles
             self.update_ammo_orbs()
-            self.update_dash_cooldown()
             self.update_shield_cooldown()
         except Exception as e:
             sys.stdout.write(f"[UPDATE ERROR] Uncaught exception in update loop: {e}\n")
@@ -746,11 +741,6 @@ class Game:
                 projectile.cleanup()
         self.minion_projectiles = alive_projectiles
 
-    def update_dash_cooldown(self):
-        """Update dash cooldown timer."""
-        if self.dash_cooldown_counter > 0:
-            self.dash_cooldown_counter -= 50
-    
     def _update_player_shield(self):
         """Update player shield based on shield upgrade."""
         shield_level = self.computed_weapon_stats.get('shield', 0)
