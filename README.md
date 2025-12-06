@@ -1,6 +1,6 @@
 # Top Down Game
 
-A fast-paced top-down shooter where you control a player dodging and defeating enemies while upgrading your weapon!
+A fast-paced top-down shooter where you control a player dodging and defeating enemies while upgrading your weapon through a progressive level system!
 
 ## How to Play
 
@@ -13,22 +13,33 @@ A fast-paced top-down shooter where you control a player dodging and defeating e
 - `ESC` - Pause Menu
 - `CLICK` - Fire projectile
 
-**Game Mechanics:**
-- **Score**: Tracks total enemy kills
-- **Level**: Increases as you gain XP
-- **XP System**: Kill enemies to gain XP and level up
+**Game Progression:**
+- **Game Level**: Progresses through 20+ difficulty levels (separate from player upgrades)
+  - Each level has predefined waves of enemies
+  - Waves spawn at specific times throughout the level
+  - 3-second rest period between levels to recover
+  - Enemies become progressively harder (more health, higher damage)
+  
+- **Player Level**: Increases as you gain XP (for upgrades)
+  - Kill enemies to gain XP and level up
   - Regular enemies: 1 XP
-  - Triangle enemies (Level 5+): 3 XP each
-- **Upgrades**: Choose one at each level-up
+  - Triangle enemies: 3 XP each
+  - Pentagon enemies: 7 XP each
+  - Choose one upgrade at each player level-up
 
 **Available Upgrades:**
 - `Extra Bounce` - Projectile bounces more times before returning
 - `Shrapnel` - Projectile spawns shards on impact that kill enemies
 - `Speed Boost` - Increases projectile speed
+- `Black Hole` - Create damaging vortexes
+- `Shield` - Protective barrier around player
+- `Rapid Fire` - Faster projectile firing
+- `Summon Minion` - Spawn friendly minions to attack enemies
 
 **Enemy Types:**
-- **Square Enemies** - Red, weak, 1 hit to kill
-- **Triangle Enemies** - Orange, tough, 3 hits to kill (appears at Level 5+)
+- **Basic Enemies** - Circular, 1 hit to kill, 1 XP (Levels 1-20)
+- **Triangle Enemies** - Purple triangles, 3 hits to kill, 3 XP (Levels 5+)
+- **Pentagon Enemies** - Green pentagons, 5 hits to kill, 7 XP (Levels 10+)
 
 
 ## Installation
@@ -47,7 +58,7 @@ A fast-paced top-down shooter where you control a player dodging and defeating e
 
 - `top_down_game.py` - Main game loop and Game class
 - `entities.py` - All entity classes (Player, enemies, projectiles, particles, shards)
-- `config.py` - Game constants and weapon stats
+- `constants.py` - Game configuration (includes level/wave definitions)
 - `sound.py` - Audio system
 - `utils.py` - Utility functions
 

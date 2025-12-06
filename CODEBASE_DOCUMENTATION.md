@@ -40,6 +40,11 @@ self.minions[]                          # Friendly minions from summon_minion up
 self.minion_projectiles[]               # Projectiles fired by minions
 self.computed_weapon_stats{}            # Current weapon stats (damage, speed, etc.)
 self.active_upgrades[]                  # List of collected upgrades
+self.level                              # Player level (for upgrades/progression)
+self.xp, self.xp_for_next_level         # XP tracking for player levels
+self.game_level                         # Game level (enemy difficulty, separate from player level)
+self.current_wave, self.wave_timer      # Wave management for current level
+self.is_resting, self.level_rest_timer  # Rest period tracking between levels
 ```
 
 **Key Methods:**
@@ -48,10 +53,12 @@ self.active_upgrades[]                  # List of collected upgrades
 - `attack()`: Fire projectile from player toward mouse
 - `get_attack_direction()`: Calculate angle from player to mouse cursor
 - `move_player(accel_x, accel_y)`: Apply acceleration and friction physics
-- `move_enemies()`: Update enemy positions and spawning
+- `move_enemies()`: Update enemy positions
 - `check_player_collision()`: Detect enemy-player collisions
-- `spawn_enemies()`: Spawn new enemies based on wave system
-- `add_xp(amount)`: Add XP and handle leveling
+- `start_game_level()`: Initialize a new game level
+- `_spawn_next_wave()`: Spawn the next wave of enemies
+- `update_game_level_progression()`: Update wave timers and level progression (called every 20ms)
+- `add_xp(amount)`: Add XP and handle player leveling
 - `handle_upgrade_selection(upgrade_key)`: Apply selected upgrade
 - `update_projectiles/particles/shards/black_holes()`: Entity lifecycle management
 
@@ -176,8 +183,8 @@ menu_height = title_height + (num_buttons * button_height) + ((num_buttons - 1) 
 
 ---
 
-#### 5. **constants.py** (92 lines)
-**Purpose:** Game configuration constants and upgrade definitions
+#### 5. **constants.py** (112+ lines)
+**Purpose:** Game configuration constants and upgrade/level definitions
 
 **Game Parameters:**
 ```python
@@ -189,6 +196,22 @@ PARTICLE_COUNT = 12                 # Particles in death effect
 PARTICLE_LIFE = 500                 # Particle lifetime (milliseconds)
 COLLISION_DISTANCE_SQ = 1024        # Projectile collision distance squared
 ```
+
+**Game Level Progression:**
+```python
+LEVEL_REST_DURATION = 3000          # Milliseconds between levels (3 seconds)
+
+GAME_LEVEL_WAVES: Dict[int, list] = {
+    # Each level maps to a list of waves
+    # Wave format: (enemy_type, count, spawn_delay_ms)
+    1: [('basic', 5, 0)],
+    5: [('basic', 10, 0), ('triangle', 3, 2000)],
+    20: [('pentagon', 8, 0), ('triangle', 15, 1500), ...],
+    # ... levels 1-20 fully configured
+}
+```
+
+See [Game Level Progression System](#game-level-progression-system) section for detailed documentation.
 
 **Upgrade System:**
 - `WEAPON_UPGRADES{}`: Main upgrades (damage, projectile speed, homing, etc.)
@@ -225,13 +248,34 @@ COLLISION_DISTANCE_SQ = 1024        # Projectile collision distance squared
 
 ---
 
+#### 8. **test_level_progression.py** (Test Utility)
+**Purpose:** Display and analyze game level configuration
+
+**Usage:**
+```bash
+python test_level_progression.py
+```
+
+**Output:**
+- Full wave structure for levels 1-20
+- Difficulty analysis (total enemies, composition, duration)
+- Visual representation of difficulty curve
+
+**Why It's Useful:**
+- Verify changes to wave configurations
+- See how difficulty scales across levels
+- Understand enemy spawn patterns
+- Plan new level additions
+
+---
+
 ## Game Loop Architecture
 
 ### Update Sequence (Every 50ms)
 ```
 update() called
 ├─ handle_player_movement()          # Check pressed keys, apply acceleration
-├─ move_enemies()                    # Update enemy positions & spawn new ones
+├─ move_enemies()                    # Update enemy positions
 ├─ check_player_collision()          # Detect enemy-player hits
 ├─ update_particles()                # Update & remove dead particles
 ├─ update_shards()                   # Update shrapnel, check for hits
@@ -241,7 +285,8 @@ update() called
 ├─ update_minion_projectiles()       # Update minion projectiles, check hits
 ├─ update_ammo_orbs()                # Update ammo drops (future feature)
 ├─ update_dash_cooldown()            # Cooldown tick for dash ability
-└─ update_shield_cooldown()          # Cooldown tick for shield
+├─ update_shield_cooldown()          # Cooldown tick for shield
+└─ update_game_level_progression()   # Update wave timers, spawn next wave/level
 ```
 
 ### Event Handlers
@@ -305,6 +350,232 @@ self.window_height = self.canvas.winfo_height()
   - Player spawning at wrong position
   - Projectiles disappearing instantly (out of bounds)
   - Movement clamping to wrong area
+
+---
+
+## Game Level Progression System
+
+**Important:** The "game level" (enemy difficulty progression) is **separate from** the "player level" (XP-based upgrades). They track different things.
+
+### Overview
+
+The game progresses through 20+ predefined difficulty levels with carefully designed wave patterns. Each level contains multiple waves of enemies that spawn at specific intervals, giving players time to react and strategize. After completing all waves in a level, there's a 3-second rest period before advancing to the next level.
+
+### How Wave Progression Works
+
+1. **Game Initialization:**
+   - Game starts at `self.game_level = 1`
+   - `start_game_level()` is called at game start
+   - `self.current_wave = 0` (first wave will be wave 0)
+   - `self.wave_timer = 0` (ready to spawn immediately)
+
+2. **During Gameplay:**
+   - `update_game_level_progression()` is called every 20ms in the update loop
+   - When `self.wave_timer <= 0` AND `self.enemies` list is empty:
+     - `_spawn_next_wave()` is called
+     - Next wave's enemies are spawned at their configured spawn time
+     - Wave timer is set to delay until next wave
+
+3. **Level Completion:**
+   - When last wave is spawned (`self.current_wave >= total_waves`):
+     - `self.is_resting = True`
+     - `self.level_rest_timer = LEVEL_REST_DURATION` (3000ms)
+     - Players see all enemies on-screen but no new ones spawn
+     - Rest timer counts down in the update loop
+
+4. **Between Levels:**
+   - Rest period displays "Game Level: X" in orange
+   - No new enemies spawn during rest
+   - Player can attack remaining enemies (optional)
+   - Rest timer reaches 0 → `self.game_level += 1` → call `start_game_level()`
+   - Cycle repeats
+
+### Game Level Configuration (constants.py)
+
+```python
+GAME_LEVEL_WAVES = {
+    1: [('basic', 5, 0)],                           # Level 1: 1 wave, 5 basic enemies at 0ms
+    5: [('basic', 10, 0), ('triangle', 3, 2000)],  # Level 5: 2 waves, delay of 2s between them
+    20: [                                             # Level 20: Complex 6-wave pattern
+        ('pentagon', 8, 0),
+        ('triangle', 15, 1500),
+        ('pentagon', 8, 3000),
+        ('triangle', 12, 4500),
+        ('pentagon', 6, 6000),
+        ('triangle', 12, 7500)
+    ]
+}
+
+LEVEL_REST_DURATION = 3000  # Milliseconds between levels
+```
+
+**Wave Format:** Each wave is a tuple: `(enemy_type, count, spawn_delay_ms)`
+- `enemy_type`: `'basic'`, `'triangle'`, or `'pentagon'`
+- `count`: Number of enemies to spawn
+- `spawn_delay_ms`: When this wave spawns relative to level start (0ms = immediately)
+
+### Wave Timing Example (Level 5)
+
+```
+Time 0ms:    spawn_next_wave() called
+             Wave 0: Spawn 10 basic enemies
+             Set wave_timer = 2000ms (time until wave 1 spawns)
+
+Time 2000ms: wave_timer reaches 0, all enemies defeated
+             spawn_next_wave() called
+             Wave 1: Spawn 3 triangle enemies
+             current_wave = 2 (exceeds total waves)
+             
+Time ~5000ms: Last triangle defeated
+              All enemies gone, spawn_next_wave() called
+              is_resting = True, level_rest_timer = 3000ms
+
+Time 8000ms: Rest period complete
+             game_level = 6
+             start_game_level() called for level 6
+             Cycle repeats
+```
+
+### Difficulty Progression
+
+| Level | Waves | Total Enemies | Enemy Types | Duration |
+|-------|-------|---------------|-------------|----------|
+| 1     | 1     | 5             | Basic only  | ~2s      |
+| 5     | 2     | 13            | Basic + Triangle | ~4s |
+| 10    | 3     | 16            | Triangle + Pentagon | ~6s |
+| 15    | 4     | 25            | Triangle + Pentagon | ~7.5s |
+| 20    | 6     | 61            | Triangle + Pentagon | ~9.5s |
+| 21+   | Auto  | Procedural    | Procedural  | Scales   |
+
+**Key Progression:**
+- Levels 1-4: Basic enemies only (tutorial)
+- Levels 5-10: Introduce triangles (3 health, harder)
+- Levels 11+: Introduce pentagons (5 health, hardest)
+- Level 20+: Mix of all types with many waves
+
+### Procedurally Generated Waves (Levels 21+)
+
+For levels beyond 20, the system auto-generates waves:
+
+```python
+def _spawn_next_wave_autogenerated():
+    # Number of waves = 3 + (level // 10), min 3, max 8
+    # Total enemies scales by: 5 + (level // 2)
+    # Pentagon ratio: min(0.4, 0.02 * level)
+    # Triangle ratio: min(0.6, 0.3 + (0.015 * (level - 20)))
+    # Basic = remaining enemies
+```
+
+**Procedural Wave Scaling:**
+- More total enemies per level
+- Higher percentage of triangles and pentagons
+- More waves per level
+- 3-second delay between waves
+
+### Instance Variables Related to Waves
+
+```python
+self.game_level: int              # Current game level (1-20+)
+self.current_wave: int            # Which wave we're on in this level (0-indexed)
+self.wave_timer: int              # Milliseconds until next wave spawns
+self.is_resting: bool             # Whether in rest period between levels
+self.level_rest_timer: int        # Milliseconds remaining in rest period
+self.game_level_text: str         # Canvas text item showing "Game Level: X"
+```
+
+### Key Methods
+
+**`start_game_level() -> None`**
+- Called when entering a new game level
+- Clears all enemies (`self.enemies.clear()`)
+- Resets wave counter to 0
+- Sets `is_resting = False`
+- Calls `_spawn_next_wave()` to spawn first wave
+
+**`_spawn_next_wave() -> None`**
+- Looks up current level in `GAME_LEVEL_WAVES` dict
+- Spawns all enemies for current wave using `_spawn_enemy_by_type()`
+- Increments `self.current_wave`
+- Calculates delay until next wave and sets `self.wave_timer`
+- If no more waves: sets `is_resting = True`
+
+**`_spawn_next_wave_autogenerated() -> None`**
+- Called for levels 21+ (not in GAME_LEVEL_WAVES)
+- Calculates enemy composition based on level
+- Spawns proportional mix of basic, triangle, pentagon enemies
+- Sets 3-second delay between waves
+
+**`_get_spawn_position() -> Tuple[int, int]`**
+- Returns random position outside screen bounds
+- Chooses random edge (top, bottom, left, right)
+- Spawns at `margin = 200` pixels from edge
+
+**`_spawn_enemy_by_type(x: int, y: int, enemy_type: str) -> None`**
+- Creates specific enemy type at position (x, y)
+- Appends to `self.enemies[]`
+
+**`update_game_level_progression() -> None`**
+- Called every 20ms in update loop
+- Decrements `self.wave_timer` and `self.level_rest_timer`
+- When timer reaches 0 and all enemies defeated: spawns next wave
+- When rest period complete: advances to next level
+- Updates canvas text display with current level
+
+### Deprecated Methods (Kept for Compatibility)
+
+These methods are no longer used but kept in codebase for backward compatibility:
+- `spawn_enemies()` - Replaced by `start_game_level()`
+- `respawn_enemies()` - Replaced by wave-based system
+- `on_respawn_timer()` - Replaced by `update_game_level_progression()`
+- `_spawn_enemy_by_level()` - Replaced by `_spawn_enemy_by_type()`
+- `get_current_respawn_interval()` - Replaced by wave timers
+
+### Modifying Wave Configurations
+
+To change wave patterns for existing levels:
+
+1. Open `constants.py`
+2. Find the level you want to modify in `GAME_LEVEL_WAVES`
+3. Adjust the tuple values:
+   - Change enemy type: `'basic'` → `'triangle'` → `'pentagon'`
+   - Change enemy count: `5` → `10`
+   - Change wave timing: `2000` → `3000` (milliseconds from level start)
+4. Test with `python test_level_progression.py` to see the changes
+5. Run actual game to verify difficulty feels right
+
+**Example:** Make Level 3 harder by adding more triangles:
+```python
+# Before
+3: [('basic', 10, 0), ('basic', 5, 2000)],
+
+# After
+3: [('basic', 10, 0), ('triangle', 3, 2000), ('basic', 5, 3500)],
+```
+
+### Adding New Levels
+
+To extend beyond level 20 with hand-crafted waves:
+
+1. Add entry to `GAME_LEVEL_WAVES` in `constants.py`:
+```python
+21: [('pentagon', 5, 0), ('triangle', 12, 2000), ('pentagon', 4, 4500)],
+```
+
+2. The game will use your custom waves instead of auto-generating
+
+If you don't add a custom level 21, the system automatically generates one.
+
+### Testing Wave Progression
+
+Run the test script to visualize all levels:
+```bash
+python test_level_progression.py
+```
+
+Shows:
+- Wave structure for each level (enemy types, counts, timing)
+- Difficulty metrics (total enemies, composition, duration)
+- Enemy scaling curve from level 1 to 20+
 
 ---
 

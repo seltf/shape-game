@@ -6,7 +6,7 @@ from typing import Dict, Any
 # ============================================================================
 # VERSION
 # ============================================================================
-VERSION: str = "1.0.0"  # Game version number
+VERSION: str = "0.0.1"  # Game version number
 
 # ============================================================================
 # DISPLAY & WINDOW
@@ -37,6 +37,49 @@ RESPAWN_BATCH_SIZE: int = 20  # Enemies to spawn per batch
 RESPAWN_INTERVAL: int = 10000  # Milliseconds between batches (10 seconds)
 RESPAWN_INTERVAL_MIN: int = 3000  # Minimum interval at high difficulty (3 seconds)
 RESPAWN_BATCH_SCALE: float = 0.8  # Milliseconds to reduce interval per minute played (scaled for 50 FPS logic: was 2, now 0.8)
+
+# ============================================================================
+# GAME LEVEL PROGRESSION & WAVES
+# ============================================================================
+LEVEL_REST_DURATION: int = 2000  # Milliseconds of rest between levels (2 seconds)
+WAVE_SPAWN_INTERVAL: int = 5000  # Default milliseconds between wave spawns (5 seconds)
+
+# Wave-based level progression. Each level has waves of enemies.
+# Wave format: (enemy_type, count, spawn_delay_ms)
+# enemy_type: 'basic' (0), 'triangle' (1), 'pentagon' (2)
+GAME_LEVEL_WAVES: Dict[int, list] = {
+    # Level 1: Simple intro - one batch of basic enemies
+    1: [('basic', 10, 0)],
+    
+    # Level 2-3: Slightly more enemies
+    2: [('basic', 12, 0)],
+    3: [('basic', 15, 0), ('basic', 8, 0)],
+    
+    # Level 4-6: Introduction to harder enemies
+    4: [('basic', 18, 0), ('basic', 12, 0)],
+    5: [('basic', 15, 0), ('triangle', 5, 0)],
+    6: [('basic', 12, 0), ('triangle', 8, 0), ('basic', 10, 0)],
+    
+    # Level 7-10: More mixed waves
+    7: [('basic', 15, 0), ('triangle', 6, 0), ('basic', 12, 0)],
+    8: [('triangle', 10, 0), ('basic', 18, 0), ('triangle', 5, 0)],
+    9: [('basic', 18, 0), ('triangle', 8, 0), ('pentagon', 3, 0)],
+    10: [('triangle', 12, 0), ('pentagon', 5, 0), ('triangle', 8, 0)],
+    
+    # Level 11-15: Harder difficulty with more enemy types
+    11: [('basic', 18, 0), ('triangle', 10, 0), ('pentagon', 4, 0), ('basic', 12, 0)],
+    12: [('triangle', 15, 0), ('pentagon', 6, 0), ('triangle', 10, 0), ('basic', 15, 0)],
+    13: [('pentagon', 6, 0), ('triangle', 15, 0), ('pentagon', 5, 0), ('triangle', 12, 0)],
+    14: [('basic', 20, 0), ('pentagon', 8, 0), ('triangle', 12, 0), ('pentagon', 4, 0)],
+    15: [('triangle', 18, 0), ('pentagon', 8, 0), ('triangle', 15, 0), ('pentagon', 6, 0)],
+    
+    # Level 16-20: High difficulty with many waves and hordes
+    16: [('pentagon', 8, 0), ('triangle', 18, 0), ('pentagon', 10, 0), ('triangle', 15, 0), ('basic', 18, 0)],
+    17: [('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 18, 0), ('pentagon', 8, 0), ('triangle', 15, 0)],
+    18: [('pentagon', 10, 0), ('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 18, 0), ('pentagon', 8, 0)],
+    19: [('triangle', 25, 0), ('pentagon', 15, 0), ('triangle', 20, 0), ('pentagon', 10, 0), ('triangle', 18, 0)],
+    20: [('pentagon', 15, 0), ('triangle', 25, 0), ('pentagon', 15, 0), ('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 20, 0)],
+}
 
 # ============================================================================
 # PROJECTILE & WEAPON CONFIGURATION
