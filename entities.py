@@ -1017,9 +1017,10 @@ class Projectile:
         return closest
     
     def _find_next_target(self) -> Optional[Any]:
-        """Find the closest unhit enemy for ricochet."""
+        """Find the closest unhit enemy for ricochet within range."""
         closest: Optional[Any] = None
         closest_dist_sq: float = float('inf')
+        max_range_sq = RICOCHET_RANGE ** 2
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
@@ -1029,7 +1030,7 @@ class Projectile:
             dx = ex_center - self.x
             dy = ey_center - self.y
             dist_sq = dx * dx + dy * dy
-            if dist_sq < closest_dist_sq:
+            if dist_sq < closest_dist_sq and dist_sq < max_range_sq:
                 closest_dist_sq = dist_sq
                 closest = enemy
         return closest
