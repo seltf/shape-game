@@ -576,35 +576,15 @@ class MenuManager:
         play_beep_async(300, 80, self.game)
         
         # Check which upgrade button was clicked
-        import sys
-        sys.stdout.write(f"[DEBUG] Upgrade menu click at: ({event.x}, {event.y})\n")
-        sys.stdout.flush()
-        
         upgrade_buttons_copy = list(self.upgrade_buttons.items())
         for upgrade_key, btn_id in upgrade_buttons_copy:
-            sys.stdout.write(f"[DEBUG] Checking upgrade button: {upgrade_key}\n")
-            sys.stdout.flush()
             try:
                 coords = self.canvas.coords(btn_id)
-                sys.stdout.write(f"[DEBUG] Got coords for {upgrade_key}: {coords}\n")
-                sys.stdout.flush()
-                if coords and len(coords) >= 4:
-                    x1, y1, x2, y2 = coords[0], coords[1], coords[2], coords[3]
-                    sys.stdout.write(f"[DEBUG] Checking if ({event.x}, {event.y}) in ({x1}, {y1}, {x2}, {y2})\n")
-                    sys.stdout.flush()
-                    if x1 <= event.x <= x2 and y1 <= event.y <= y2:
-                        sys.stdout.write(f"[DEBUG] Click is on button {upgrade_key}, calling on_upgrade_selection\n")
-                        sys.stdout.flush()
-                        self.on_upgrade_selection(upgrade_key)
-                        return
+                if coords and len(coords) >= 4 and (coords[0] <= event.x <= coords[2] and coords[1] <= event.y <= coords[3]):
+                    self.on_upgrade_selection(upgrade_key)
+                    return
             except Exception as e:
-                sys.stdout.write(f"[ERROR] Error checking button {upgrade_key}: {e}\n")
-                sys.stdout.flush()
-                import traceback
-                traceback.print_exc()
-        
-        sys.stdout.write(f"[DEBUG] No upgrade button matched click at ({event.x}, {event.y}), returning\n")
-        sys.stdout.flush()
+                pass
 
     def handle_pause_menu_click(self, event: tk.Event) -> None:
         """Handle clicks in the pause menu."""
