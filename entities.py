@@ -1288,8 +1288,9 @@ class Minion:
         
         # If no current target, look for enemies in aggro range (around player, not minion)
         if not self.current_target:
-            closest_enemy = None
-            closest_dist_sq = self.aggro_range * self.aggro_range
+            # Find enemies in aggro range and pick one (with some randomness for independence)
+            nearby_enemies = []
+            aggro_range_sq = self.aggro_range * self.aggro_range
             
             for enemy in self.game.enemies:
                 ex, ey = enemy.get_position()
@@ -1301,18 +1302,18 @@ class Minion:
                 dy = ey_center - py
                 dist_sq = dx * dx + dy * dy
                 
-                if dist_sq < closest_dist_sq:
-                    closest_dist_sq = dist_sq
-                    closest_enemy = enemy
+                if dist_sq < aggro_range_sq:
+                    nearby_enemies.append(enemy)
             
-            if closest_enemy:
-                self.current_target = closest_enemy
+            if nearby_enemies:
+                # Pick a random enemy from nearby ones for more independent behavior
+                self.current_target = random.choice(nearby_enemies)
         
         # Calculate repulsion from other minions and enemies
         repulsion_x = 0.0
         repulsion_y = 0.0
-        min_distance = 40  # Minions try to stay this far apart from other minions
-        repulsion_strength = 0.15  # How strong the repulsion is
+        min_distance = 25  # Minions try to stay this far apart (reduced for more independence)
+        repulsion_strength = 0.08  # Weaker repulsion for more independent movement
         
         # Repulsion from other minions
         for other_minion in self.game.minions:
@@ -1332,7 +1333,7 @@ class Minion:
         
         # Repulsion from enemies (push minions away from hostile enemies)
         enemy_min_distance = 50  # Keep distance from enemies
-        enemy_repulsion_strength = 0.25  # Stronger repulsion from enemies
+        enemy_repulsion_strength = 0.2  # Reduced for more aggressive behavior
         
         for enemy in self.game.enemies:
             ex, ey = enemy.get_position()
