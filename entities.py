@@ -1234,10 +1234,13 @@ class Minion:
         self.vy: float = 0  # Velocity y
         self.size: int = minion_size
         self.max_speed: int = 4  # Slightly slower than player
+        self.follow_distance: int = 80  # Max distance from player to maintain follow
+        self.aggro_range: int = 150  # Range to detect enemies for engagement
+        self.aggro_drop_distance: int = 250  # Distance from player to drop aggro and return
         self.attack_range: int = 120  # Distance to engage enemies
         self.attack_cooldown: int = 0  # Milliseconds until next attack
         self.attack_cooldown_reset: int = 600  # Attack every 600ms
-        self.last_target: Optional[Any] = None  # Track last target to maintain focus
+        self.current_target: Optional[Any] = None  # Current enemy being engaged
         
         # Visual representation - green circle for minion
         self.rect: int = self.canvas.create_oval(
@@ -1254,12 +1257,46 @@ class Minion:
         
         # Get player position
         px, py = self.game.player.get_center()
+        dx_to_player = px - self.x
+        dy_to_player = py - self.y
+        dist_to_player = math.hypot(dx_to_player, dy_to_player)
         
-        # Follow player - move towards player if not too close
-        follow_distance = 80  # Stay within this distance of player (increased from 60)
-        dx = px - self.x
-        dy = py - self.y
-        dist_to_player = math.hypot(dx, dy)
+        # Check if current target is still valid (alive and in range)
+        if self.current_target:
+            if self.current_target not in self.game.enemies:
+                # Target died, drop aggro
+                self.current_target = None
+            else:
+                # Check if target is still within aggro drop distance from player
+                ex, ey = self.current_target.get_position()
+                ex_center = ex + ENEMY_SIZE_HALF
+                ey_center = ey + ENEMY_SIZE_HALF
+                target_dist_from_player = math.hypot(ex_center - px, ey_center - py)
+                
+                if target_dist_from_player > self.aggro_drop_distance:
+                    # Target is too far from player, drop aggro and return
+                    self.current_target = None
+        
+        # If no current target, look for enemies in aggro range
+        if not self.current_target:
+            closest_enemy = None
+            closest_dist_sq = self.aggro_range * self.aggro_range
+            
+            for enemy in self.game.enemies:
+                ex, ey = enemy.get_position()
+                ex_center = ex + ENEMY_SIZE_HALF
+                ey_center = ey + ENEMY_SIZE_HALF
+                
+                dx = ex_center - self.x
+                dy = ey_center - self.y
+                dist_sq = dx * dx + dy * dy
+                
+                if dist_sq < closest_dist_sq:
+                    closest_dist_sq = dist_sq
+                    closest_enemy = enemy
+            
+            if closest_enemy:
+                self.current_target = closest_enemy
         
         # Calculate repulsion from other minions
         repulsion_x = 0.0
@@ -1286,19 +1323,39 @@ class Minion:
         self.vx += repulsion_x
         self.vy += repulsion_y
         
-        # If too far from player, move closer
-        if dist_to_player > follow_distance:
-            # Apply acceleration towards player
-            target_vx = (dx / dist_to_player) * self.max_speed
-            target_vy = (dy / dist_to_player) * self.max_speed
+        # Movement logic: either chase target or follow player
+        if self.current_target:
+            # Move towards current target
+            ex, ey = self.current_target.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
             
-            # Smoothly blend velocity toward target
-            self.vx += (target_vx - self.vx) * 0.2
-            self.vy += (target_vy - self.vy) * 0.2
+            dx_to_target = ex_center - self.x
+            dy_to_target = ey_center - self.y
+            dist_to_target = math.hypot(dx_to_target, dy_to_target)
+            
+            if dist_to_target > 0:
+                # Move towards target
+                target_vx = (dx_to_target / dist_to_target) * self.max_speed
+                target_vy = (dy_to_target / dist_to_target) * self.max_speed
+                
+                # Smoothly blend velocity toward target
+                self.vx += (target_vx - self.vx) * 0.2
+                self.vy += (target_vy - self.vy) * 0.2
         else:
-            # Close enough, apply friction
-            self.vx *= 0.85
-            self.vy *= 0.85
+            # No target: follow player if too far
+            if dist_to_player > self.follow_distance:
+                # Apply acceleration towards player
+                target_vx = (dx_to_player / dist_to_player) * self.max_speed
+                target_vy = (dy_to_player / dist_to_player) * self.max_speed
+                
+                # Smoothly blend velocity toward target
+                self.vx += (target_vx - self.vx) * 0.2
+                self.vy += (target_vy - self.vy) * 0.2
+            else:
+                # Close enough to player, apply friction
+                self.vx *= 0.85
+                self.vy *= 0.85
         
         # Clamp velocity to max speed
         speed = math.hypot(self.vx, self.vy)
