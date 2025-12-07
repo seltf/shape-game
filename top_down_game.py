@@ -22,7 +22,7 @@ class Game:
     KEYSYM_MAP = {
         'Up': 'up', 'Down': 'down', 'Left': 'left', 'Right': 'right',
         'w': 'up', 's': 'down', 'a': 'left', 'd': 'right',
-        ',': 'up', 'o': 'down', 'e': 'right',  # Dvorak: comma char, o, e
+        'comma': 'up', 'o': 'down', 'e': 'right',  # Dvorak: comma key, o, e
     }
     
     def __init__(self, root: tk.Tk) -> None:
