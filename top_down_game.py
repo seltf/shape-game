@@ -10,7 +10,7 @@ from typing import List, Dict, Any, Optional, Tuple
 # Import from separate modules
 from constants import *
 from audio import play_sound_async, play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
-from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
+from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, HexagonEnemy, BossEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
 from collision import CollisionDetector, PlayerCollisionHandler
 
@@ -74,6 +74,12 @@ class Game:
         self.wave_timer = 0  # Time until next wave spawns (milliseconds)
         self.level_rest_timer = 0  # Time remaining in rest period between levels (0 = not resting)
         self.is_resting = False  # Whether we're in a rest period between levels
+        
+        # Boss fight tracking
+        self.boss_fight_active = False  # Whether boss fight is happening
+        self.current_boss = None  # Reference to current boss enemy
+        self.boss_announcement_timer = 0  # Display boss announcement
+        self.boss_minion_spawn_timer = 0  # Timer for boss minion spawns
 
         # Timer display
         self.timer_text = self.canvas.create_text(self.window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
@@ -101,7 +107,7 @@ class Game:
         self.game_over_active = False  # Whether game over screen is showing
         self.game_over_restart_btn = None  # Reference to restart button
         self.auto_fire_enabled = False  # Auto-fire toggle
-        self.attack_cooldown = 0  # Milliseconds until next attack available
+        self.attack_cooldown = 0  # Milliseconds until next attack available (after firing)
         
         # Start background music
         start_background_music(self)
@@ -178,6 +184,32 @@ class Game:
             if not self.menu_manager.upgrade_menu_active and not self.paused:
                 self.show_upgrade_menu()
 
+    def kill_enemy(self, enemy) -> None:
+        """Remove an enemy from the game and award XP based on enemy type."""
+        if enemy not in self.enemies:
+            return
+        
+        # Award XP based on enemy type
+        if isinstance(enemy, TriangleEnemy):
+            xp_reward = 1
+        elif isinstance(enemy, PentagonEnemy):
+            xp_reward = 3
+        elif isinstance(enemy, HexagonEnemy):
+            xp_reward = 4
+        else:  # Square/Circle enemies and others
+            xp_reward = 2
+        
+        # Remove from game
+        self.enemies.remove(enemy)
+        self.canvas.delete(enemy.rect)
+        
+        # Award XP
+        self.add_xp(xp_reward)
+        
+        # Update score
+        self.score += 1
+        self.canvas.itemconfig(self.score_text, text=str(self.score))
+
     def add_upgrade(self, upgrade_key):
         """Add an upgrade to active upgrades and recompute stats."""
         try:
@@ -205,6 +237,11 @@ class Game:
 
     def start_game_level(self) -> None:
         """Initialize a new game level with wave progression."""
+        # Check if this is the boss fight at level 21
+        if self.game_level == 21:
+            self._start_boss_fight()
+            return
+        
         # Don't clear enemies - let previous level's enemies stay alive
         # They'll be killed by player or move off screen naturally
         self.current_wave = 0
@@ -271,7 +308,7 @@ class Game:
         # Spawn enemies
         for _ in range(basics):
             x, y = self._get_spawn_position()
-            self._spawn_enemy_by_type(x, y, 'basic')
+            self._spawn_enemy_by_type(x, y, 'square')
         for _ in range(triangles):
             x, y = self._get_spawn_position()
             self._spawn_enemy_by_type(x, y, 'triangle')
@@ -281,6 +318,103 @@ class Game:
         
         self.current_wave += 1
         self.wave_timer = WAVE_SPAWN_INTERVAL  # Use constant for wave spawn timing
+    
+    def _start_boss_fight(self) -> None:
+        """Initialize the boss fight at level 21."""
+        print("[BOSS] ===== BOSS FIGHT INITIATED =====")
+        self.boss_fight_active = True
+        self.boss_announcement_timer = 3000  # Display announcement for 3 seconds
+        self.boss_minion_spawn_timer = 5000  # First minion wave after 5 seconds
+        
+        # Spawn boss in center of screen
+        boss_x = self.window_width // 2 - ENEMY_SIZE // 2
+        boss_y = self.window_height // 2 - ENEMY_SIZE // 2
+        self.current_boss = BossEnemy(self.canvas, boss_x, boss_y, ENEMY_SIZE)
+        self.enemies.append(self.current_boss)
+        
+        # Clear existing waves/enemies for clean boss fight
+        for enemy in self.enemies[:-1]:  # Keep only the boss
+            self.canvas.delete(enemy.rect)
+        self.enemies = [self.current_boss]
+        
+        print(f"[BOSS] Boss spawned with {self.current_boss.health} HP")
+    
+    def _update_boss_fight(self) -> None:
+        """Update boss fight mechanics during combat."""
+        if not self.boss_fight_active or not self.current_boss:
+            return
+        
+        # Update boss announcement timer
+        if self.boss_announcement_timer > 0:
+            self.boss_announcement_timer -= 20
+        
+        # Update minion spawn timer
+        if self.boss_minion_spawn_timer > 0:
+            self.boss_minion_spawn_timer -= 20
+            if self.boss_minion_spawn_timer <= 0:
+                self._spawn_boss_minions()
+                # Schedule next minion wave in 8 seconds
+                self.boss_minion_spawn_timer = 8000
+        
+        # Check if boss is defeated
+        if self.current_boss not in self.enemies:
+            self._boss_defeated()
+    
+    def _spawn_boss_minions(self) -> None:
+        """Spawn minion waves for the boss fight."""
+        if not self.current_boss:
+            return
+        
+        phase = self.current_boss.get_phase()
+        
+        # Phase 1: Spawn 3 hexagons
+        if phase == 1:
+            minion_count = 3
+            enemy_type = 'hexagon'
+        # Phase 2: Spawn 4 hexagons and 2 pentagons
+        elif phase == 2:
+            minion_count = 4
+            enemy_type = 'hexagon'
+            # Spawn pentagons too
+            for _ in range(2):
+                x, y = self._get_spawn_position()
+                self._spawn_enemy_by_type(x, y, 'pentagon')
+        # Phase 3: Spawn 5 hexagons and 3 pentagons
+        else:
+            minion_count = 5
+            enemy_type = 'hexagon'
+            # Spawn pentagons too
+            for _ in range(3):
+                x, y = self._get_spawn_position()
+                self._spawn_enemy_by_type(x, y, 'pentagon')
+        
+        # Spawn main minion wave
+        for _ in range(minion_count):
+            x, y = self._get_spawn_position()
+            self._spawn_enemy_by_type(x, y, enemy_type)
+        
+        print(f"[BOSS] Minion wave spawned (Phase {phase}): {minion_count}x {enemy_type}")
+    
+    def _boss_defeated(self) -> None:
+        """Handle boss defeat and victory."""
+        print("[BOSS] ===== BOSS DEFEATED =====")
+        self.boss_fight_active = False
+        self.current_boss = None
+        
+        # Award major XP bonus
+        xp_reward = 50
+        self.add_xp(xp_reward)
+        print(f"[BOSS] Victory! Awarded {xp_reward} XP")
+        
+        # Display victory message briefly
+        victory_text = self.canvas.create_text(
+            self.window_width // 2, self.window_height // 2,
+            text="BOSS DEFEATED!\nGAME COMPLETE!",
+            font=('Arial', 48, 'bold'), fill='gold', anchor='center'
+        )
+        
+        # End game after 3 seconds
+        self.canvas.after(3000, self.game_over)
     
     def _get_spawn_position(self) -> Tuple[int, int]:
         """Get a random spawn position outside screen bounds."""
@@ -308,11 +442,31 @@ class Game:
             enemy = TriangleEnemy(self.canvas, x, y, ENEMY_SIZE)
         elif enemy_type == 'pentagon':
             enemy = PentagonEnemy(self.canvas, x, y, ENEMY_SIZE)
-        else:  # 'basic'
+        elif enemy_type == 'hexagon':
+            enemy = HexagonEnemy(self.canvas, x, y, ENEMY_SIZE)
+        elif enemy_type == 'boss':
+            enemy = BossEnemy(self.canvas, x, y, ENEMY_SIZE)
+        else:  # 'square' (4-sided, basic difficulty)
             enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
         
         self.enemies.append(enemy)
     
+    def spawn_enemy(self, enemy_type: str) -> None:
+        """Spawn a single enemy of the specified type at a random location around the player."""
+        px, py = self.player.get_center()
+        
+        # Spawn at a random angle and distance around player
+        angle = random.random() * 2 * math.pi
+        distance = 100 + random.random() * 50  # 100-150 pixels away
+        spawn_x = px + int(math.cos(angle) * distance)
+        spawn_y = py + int(math.sin(angle) * distance)
+        
+        # Clamp to screen bounds
+        spawn_x = max(ENEMY_SIZE_HALF, min(self.window_width - ENEMY_SIZE_HALF, spawn_x))
+        spawn_y = max(ENEMY_SIZE_HALF, min(self.window_height - ENEMY_SIZE_HALF, spawn_y))
+        
+        self._spawn_enemy_by_type(spawn_x, spawn_y, enemy_type)
+
     def spawn_enemies(self):
         """[DEPRECATED] Use start_game_level() instead. Kept for compatibility."""
         self.start_game_level()
@@ -353,12 +507,14 @@ class Game:
         """Update wave timers and level progression."""
         # Handle rest period between levels
         if self.is_resting:
-            self.level_rest_timer -= 20  # Decrement by logic tick (20ms)
-            if self.level_rest_timer <= 0:
-                # Rest period complete, advance to next level
-                self.is_resting = False
-                self.game_level += 1
-                self.start_game_level()
+            # Only count down rest timer if all enemies are dead
+            if len(self.enemies) == 0:
+                self.level_rest_timer -= 20  # Decrement by logic tick (20ms)
+                if self.level_rest_timer <= 0:
+                    # Rest period complete, advance to next level
+                    self.is_resting = False
+                    self.game_level += 1
+                    self.start_game_level()
             return
         
         # Decrement wave timer
@@ -533,8 +689,19 @@ class Game:
             self.auto_fire_enabled = not self.auto_fire_enabled
             print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
             return
+        elif event.keysym in ['1', '2', '3']:  # Number keys for upgrade selection
+            if self.menu_manager.upgrade_menu_active and self.menu_manager.upgrade_menu_clickable:
+                # Convert key to upgrade index (1=first, 2=second, 3=third)
+                upgrade_index = int(event.keysym) - 1
+                # Get the upgrade choices in order
+                upgrade_choices_list = list(self.menu_manager.upgrade_choices)
+                if upgrade_index < len(upgrade_choices_list):
+                    upgrade_key = upgrade_choices_list[upgrade_index]
+                    self.menu_manager.on_upgrade_selection(upgrade_key)
+                    print(f"[ACTION] Upgrade selected via key {event.keysym}: {upgrade_key}")
+            return
         elif event.keysym == 'Escape':
-            print(f"[DEBUG] Escape pressed. paused={self.paused}, dev_menu_active={self.menu_manager.dev_menu_active}")
+            print(f"[DEBUG] Escape pressed. paused={self.paused}, dev_menu_active={self.menu_manager.dev_menu_active}, upgrade_menu_active={self.menu_manager.upgrade_menu_active}")
             # If dev menu is open, close it
             if self.menu_manager.dev_menu_active:
                 print("[DEBUG] Closing dev menu")
@@ -543,7 +710,7 @@ class Game:
             elif self.paused:
                 print("[DEBUG] Closing pause menu")
                 self.hide_pause_menu()
-            # Otherwise, open pause menu
+            # Otherwise, open pause menu (even if upgrade menu is showing, since game is not paused)
             else:
                 print("[DEBUG] Opening pause menu")
                 self.show_pause_menu()
@@ -636,12 +803,8 @@ class Game:
             # Track time played
             self.game_time_ms += 20
             
-            # Update attack cooldown
-            if self.attack_cooldown > 0:
-                self.attack_cooldown -= 20
-            
-            # Auto-fire if enabled and cooldown is ready
-            if self.auto_fire_enabled and self.attack_cooldown <= 0:
+            # Auto-fire if enabled (return time limits firing)
+            if self.auto_fire_enabled:
                 self.attack()
             
             self.handle_player_movement()
@@ -656,6 +819,7 @@ class Game:
             self.update_ammo_orbs()
             self.update_shield_cooldown()
             self.update_game_level_progression()  # Update wave and level progression
+            self._update_boss_fight()  # Update boss fight mechanics if active
         except Exception as e:
             sys.stdout.write(f"[UPDATE ERROR] Uncaught exception in update loop: {e}\n")
             import traceback
@@ -871,9 +1035,9 @@ class Game:
         # Fixed ammo value - always 1 orb
         max_ammo = 1
         
-        # Calculate available ammo - only show orb when there are no main projectiles actively in combat
-        # Mini-forks don't count as active ammo usage
-        has_active_main_projectile = any(p for p in self.projectiles if not p.is_mini_fork and not p.returning)
+        # Calculate available ammo - only show orb when there are no main projectiles at all
+        # (including ones that are returning)
+        has_active_main_projectile = any(p for p in self.projectiles if not p.is_mini_fork)
         available_ammo = 0 if has_active_main_projectile else 1
         
         # Remove old orbs
@@ -929,17 +1093,71 @@ class Game:
                 self.ammo_orbs.append(orb_id)
 
     def move_enemies(self):
-        """Move all enemies towards the player."""
+        """Move all enemies towards the player with collision avoidance."""
         px, py = self.player.get_center()
-        enemy_count = len(self.enemies)
+        
+        # Apply collision avoidance and movement
         for enemy in self.enemies:
             # Different speeds for different enemy types
             if isinstance(enemy, PentagonEnemy):
-                enemy.move_towards(px, py, speed=1)  # Pentagons move slower
+                speed = 1.5  # Pentagons move slower
             elif isinstance(enemy, TriangleEnemy):
-                enemy.move_towards(px, py, speed=2)  # Triangles medium speed
-            else:  # CircleEnemy
-                enemy.move_towards(px, py, speed=2)  # Circles normal speed
+                speed = 2.2  # Triangles medium speed
+            else:  # CircleEnemy, SquareEnemy, HexagonEnemy
+                speed = 2.4  # Others normal speed
+            
+            ex, ey = enemy.get_position()
+            ex_center = ex + ENEMY_SIZE_HALF
+            ey_center = ey + ENEMY_SIZE_HALF
+            
+            # Calculate direction to player
+            dx = px - ex_center
+            dy = py - ey_center
+            dist = math.hypot(dx, dy)
+            
+            if dist > 0:
+                # Base movement toward player
+                move_x = (dx / dist) * speed
+                move_y = (dy / dist) * speed
+                
+                # Collision avoidance: steer away from nearby enemies
+                for other in self.enemies:
+                    if other is enemy:
+                        continue
+                    
+                    ox, oy = other.get_position()
+                    ox_center = ox + ENEMY_SIZE_HALF
+                    oy_center = oy + ENEMY_SIZE_HALF
+                    
+                    # Vector from other enemy to this enemy
+                    diff_x = ex_center - ox_center
+                    diff_y = ey_center - oy_center
+                    enemy_dist = math.hypot(diff_x, diff_y)
+                    
+                    # Avoidance radius: push enemies apart if too close
+                    min_distance = 40  # Avoid radius
+                    if enemy_dist < min_distance and enemy_dist > 0:
+                        # Steer away proportionally to closeness
+                        steer_strength = 0.6 * (min_distance - enemy_dist) / min_distance
+                        avoidance_x = (diff_x / enemy_dist) * steer_strength
+                        avoidance_y = (diff_y / enemy_dist) * steer_strength
+                        move_x += avoidance_x
+                        move_y += avoidance_y
+                
+                # Apply movement directly
+                enemy.x += int(move_x)
+                enemy.y += int(move_y)
+                
+                # Update display
+                if isinstance(enemy, TriangleEnemy):
+                    enemy.points = [
+                        enemy.x + enemy.size//2, enemy.y,
+                        enemy.x, enemy.y + enemy.size,
+                        enemy.x + enemy.size, enemy.y + enemy.size
+                    ]
+                    enemy.canvas.coords(enemy.rect, *enemy.points)
+                else:
+                    enemy.canvas.coords(enemy.rect, enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)
 
     def check_player_collision(self) -> None:
         """Check if any enemy collides with player and deal damage."""
@@ -1017,7 +1235,7 @@ class Game:
         time_str = self.format_time(self.game_time_ms)
         self.canvas.create_text(
             overlay_x + overlay_width // 2, overlay_y + 120,
-            text=f'Time: {time_str}',
+            text=f'{time_str}',
             fill='cyan',
             font=('Arial', 20)
         )

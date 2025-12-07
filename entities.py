@@ -106,9 +106,9 @@ class BlackHole:
     
     def _update_rings(self) -> None:
         """Update animated rings, spawning new ones and shrinking existing ones."""
-        # Spawn a new ring every 400ms (8 updates at 50ms per update)
+        # Spawn a new ring every 500ms (25 updates at 20ms per update)
         self.ring_spawn_counter += 1
-        if self.ring_spawn_counter >= 8:
+        if self.ring_spawn_counter >= 25:
             self.ring_spawn_counter = 0
             self._spawn_new_ring()
         
@@ -117,8 +117,8 @@ class BlackHole:
         for ring_data in self.active_rings:
             ring_id, current_size, max_size = ring_data
             
-            # Shrink ring by 2 pixels per update (slower animation)
-            new_size = current_size - 2
+            # Shrink ring by 1 pixel per update (slower animation for 20ms ticks)
+            new_size = current_size - 1
             
             if new_size <= 0:
                 # Ring has shrunk to center, remove it
@@ -173,7 +173,7 @@ class BlackHole:
         play_sound_async('black_hole_detonate', 80, 200, self.game)
         
         # Apply effects to all enemies in the radius
-        fling_speed = 4.8  # Speed to fling enemies outward (scaled for 50 FPS logic)
+        fling_speed = 1.92  # Speed to fling enemies outward (scaled for 20ms tick rate)
         
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
@@ -191,11 +191,15 @@ class BlackHole:
                 
                 # Deal damage based on level: 1 damage at levels 1-4, 2 damage at level 5+
                 damage = 2 if self.level >= 5 else 1
-                if hasattr(enemy, 'health'):
-                    enemy.health -= damage
+                if hasattr(enemy, 'take_damage'):
+                    # All enemies now have take_damage method
+                    for _ in range(damage):
+                        if not enemy.take_damage():
+                            break  # Enemy died
                 else:
-                    # Basic enemies have 1 health, so damage kills them
-                    enemy.health = -1
+                    # Fallback for any entities without take_damage (shouldn't happen)
+                    if hasattr(enemy, 'health'):
+                        enemy.health -= damage
                 
                 # Fling enemy outward from black hole
                 # Direction away from black hole
@@ -217,25 +221,10 @@ class BlackHole:
                 # Remove dead enemy from canvas
                 ex, ey = enemy.get_position()
                 self.game.create_death_poof(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
-                self.game.canvas.delete(enemy.rect)
-                
-                # Award XP based on enemy type
-                is_pentagon = isinstance(enemy, PentagonEnemy)
-                is_triangle = isinstance(enemy, TriangleEnemy)
-                
-                if is_pentagon:
-                    xp_reward = 7
-                elif is_triangle:
-                    xp_reward = 3
-                else:
-                    xp_reward = 1
-                self.game.add_xp(xp_reward)
-                self.game.score += 1
+                # Use game's kill_enemy method to handle removal and XP
+                self.game.kill_enemy(enemy)
         
         self.game.enemies = alive_enemies
-        
-        # Update score display
-        self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
     
     def cleanup(self) -> None:
         """Remove black hole from canvas."""
@@ -390,15 +379,18 @@ class Player:
 
 class Enemy:
     """
-    Represents an enemy in the game.
+    Represents a square (4-sided) enemy in the game.
+    Takes 4 hits to defeat. Basic difficulty enemy.
     Handles position, movement towards the player, and rendering.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
-        """Initialize enemy at (x, y) with given size."""
+        """Initialize square enemy at (x, y) with given size."""
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.sides: int = 4  # Square = 4 sides
+        self.health: int = 4  # Takes 4 hits to kill (sides = strength)
         self.being_pulled: bool = False  # Whether currently pulled by black hole
         self.pull_velocity_x: float = 0  # Pull force direction X
         self.pull_velocity_y: float = 0  # Pull force direction Y
@@ -440,12 +432,17 @@ class Enemy:
     def get_position(self) -> Tuple[float, float]:
         """Return the top-left coordinates of the enemy rectangle."""
         return self.x, self.y
+    
+    def take_damage(self) -> bool:
+        """Reduce health by 1. Returns True if enemy is still alive."""
+        self.health -= 1
+        return self.health > 0
 
 
 class TriangleEnemy:
     """
-    Represents a triangle enemy that takes three hits to defeat.
-    Tougher than the basic square enemy.
+    Represents a triangle (3-sided) enemy.
+    Takes 2 hits to defeat. Weak enemy type.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize triangle enemy at (x, y) with given size."""
@@ -453,7 +450,8 @@ class TriangleEnemy:
         self.size: int = size
         self.x: float = x
         self.y: float = y
-        self.health: int = 5  # Takes 5 hits to kill
+        self.sides: int = 3  # Triangle = 3 sides
+        self.health: int = 2  # Takes 2 hits to kill
         self.being_pulled: bool = False  # Whether currently pulled by black hole
         self.pull_velocity_x: float = 0  # Pull force direction X
         self.pull_velocity_y: float = 0  # Pull force direction Y
@@ -463,6 +461,11 @@ class TriangleEnemy:
         self.push_velocity_y: float = 0  # Push force direction Y
         self.push_timer: int = 0  # Frames remaining to be pushed
         self.shield_immunity: int = 0  # Frames of immunity after shield hit
+        # Pop effect when spawned from hexagon split
+        self.pop_velocity_x: float = 0  # Outward velocity during pop
+        self.pop_velocity_y: float = 0
+        self.pop_distance: float = 0  # Distance traveled during pop
+        self.pop_distance_max: float = 0  # Max distance to pop (0 = no pop)
         # Draw triangle using create_polygon
         # Triangle points: top center, bottom-left, bottom-right
         self.points: List[float] = [
@@ -474,8 +477,13 @@ class TriangleEnemy:
 
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply pop effect if triangle is spawning from hexagon split
+        if self.pop_distance_max > 0 and self.pop_distance < self.pop_distance_max:
+            self.x += self.pop_velocity_x
+            self.y += self.pop_velocity_y
+            self.pop_distance += math.hypot(self.pop_velocity_x, self.pop_velocity_y)
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -510,8 +518,8 @@ class TriangleEnemy:
 
 class PentagonEnemy:
     """
-    Represents a pentagon tank enemy that's tougher than triangles.
-    Takes many hits but gives good XP.
+    Represents a pentagon (5-sided) tank enemy.
+    Takes 5 hits to defeat. Strongest enemy type.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize pentagon enemy at (x, y) with given size."""
@@ -519,7 +527,8 @@ class PentagonEnemy:
         self.size: int = size
         self.x: float = x
         self.y: float = y
-        self.health: int = 8  # Takes 8 hits to kill (tank)
+        self.sides: int = 5  # Pentagon = 5 sides
+        self.health: int = 5  # Takes 5 hits to kill (sides = strength)
         self.being_pulled: bool = False  # Whether currently pulled by black hole
         self.pull_velocity_x: float = 0  # Pull force direction X
         self.pull_velocity_y: float = 0  # Pull force direction Y
@@ -573,6 +582,178 @@ class PentagonEnemy:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
         return self.health > 0
+
+
+class HexagonEnemy:
+    """
+    Represents a hexagon (6-sided) split enemy.
+    Takes 6 hits to defeat. When killed, splits into 2 triangle enemies.
+    Special ability: splits on death, creating tactical challenge.
+    """
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
+        """Initialize hexagon enemy at (x, y) with given size."""
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.sides: int = 6  # Hexagon = 6 sides
+        self.health: int = 6  # Takes 6 hits to kill (sides = strength)
+        self.being_pulled: bool = False  # Whether currently pulled by black hole
+        self.pull_velocity_x: float = 0  # Pull force direction X
+        self.pull_velocity_y: float = 0  # Pull force direction Y
+        self.pull_timer: int = 0  # Frames remaining to be pulled
+        self.being_pushed: bool = False  # Whether currently pushed by shield
+        self.push_velocity_x: float = 0  # Push force direction X
+        self.push_velocity_y: float = 0  # Push force direction Y
+        self.push_timer: int = 0  # Frames remaining to be pushed
+        self.shield_immunity: int = 0  # Frames of immunity after shield hit
+        self.should_split: bool = False  # Flag to trigger split on death
+        # Draw hexagon using create_polygon
+        self.points: List[float] = self._calculate_hexagon_points(x, y, size)
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='#00CCFF')
+    
+    def _calculate_hexagon_points(self, x: float, y: float, size: int) -> List[float]:
+        """Calculate the 6 points of a regular hexagon."""
+        points: List[float] = []
+        for i in range(6):
+            angle = (2 * math.pi * i / 6)  # Start from right, 60 degrees apart
+            px = x + size//2 + int((size//2) * math.cos(angle))
+            py = y + size//2 + int((size//2) * math.sin(angle))
+            points.extend([px, py])
+        return points
+    
+    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
+        """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply pull force if being pulled by black hole
+        if self.being_pulled and self.pull_timer > 0:
+            self.x += int(self.pull_velocity_x)
+            self.y += int(self.pull_velocity_y)
+            self.pull_timer -= 1
+            if self.pull_timer <= 0:
+                self.being_pulled = False
+        else:
+            # Normal movement toward target
+            dx = target_x - self.x
+            dy = target_y - self.y
+            dist = math.hypot(dx, dy)
+            if dist > 0:
+                self.x += int(dx/dist * speed)
+                self.y += int(dy/dist * speed)
+        
+        # Update hexagon points
+        self.points = self._calculate_hexagon_points(self.x, self.y, self.size)
+        self.canvas.coords(self.rect, *self.points)
+    
+    def get_position(self) -> Tuple[float, float]:
+        """Return the center coordinates of the enemy for collision."""
+        return self.x, self.y
+    
+    def take_damage(self) -> bool:
+        """Reduce health by 1. Returns True if enemy is still alive."""
+        self.health -= 1
+        return self.health > 0
+
+
+class BossEnemy:
+    """
+    Represents the final boss - an octagon (8-sided) enemy.
+    Takes 20 hits to defeat. Spawns smaller enemies (hexagons and pentagons) when damaged.
+    Boss-exclusive mechanics: phases, special attacks, and minion spawning.
+    """
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
+        """Initialize boss enemy at (x, y) with given size."""
+        self.canvas: tk.Canvas = canvas
+        self.size: int = size
+        self.x: float = x
+        self.y: float = y
+        self.sides: int = 8  # Octagon = 8 sides
+        self.health: int = 100  # Boss takes 100 hits to kill
+        self.max_health: int = 100  # Track original health for phase detection
+        self.being_pulled: bool = False
+        self.pull_velocity_x: float = 0
+        self.pull_velocity_y: float = 0
+        self.pull_timer: int = 0
+        self.being_pushed: bool = False
+        self.push_velocity_x: float = 0
+        self.push_velocity_y: float = 0
+        self.push_timer: int = 0
+        self.shield_immunity: int = 0
+        self.is_boss: bool = True  # Flag to identify this as a boss
+        self.spawn_counter: int = 0  # Counter for spawning minions on damage
+        self.phase: int = 1  # Boss phase (1-3)
+        self.phase_change_timer: int = 0  # Timer for phase transitions
+        # Draw octagon using create_polygon with gold/red color
+        self.points: List[float] = self._calculate_octagon_points(x, y, size)
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='#FFD700', outline='#FF6600', width=3)
+    
+    def _calculate_octagon_points(self, x: float, y: float, size: int) -> List[float]:
+        """Calculate the 8 points of a regular octagon."""
+        points: List[float] = []
+        for i in range(8):
+            angle = (2 * math.pi * i / 8) - (math.pi / 8)  # Rotated 22.5 degrees
+            px = x + size//2 + int((size//2) * math.cos(angle))
+            py = y + size//2 + int((size//2) * math.sin(angle))
+            points.extend([px, py])
+        return points
+    
+    def move_towards(self, target_x: float, target_y: float, speed: int = 3) -> None:
+        """Move boss towards (target_x, target_y) by 'speed' pixels. Boss moves slower."""
+        # Apply pull force if being pulled by black hole
+        if self.being_pulled and self.pull_timer > 0:
+            self.x += int(self.pull_velocity_x)
+            self.y += int(self.pull_velocity_y)
+            self.pull_timer -= 1
+            if self.pull_timer <= 0:
+                self.being_pulled = False
+        else:
+            # Normal movement toward target (slower than regular enemies)
+            dx = target_x - self.x
+            dy = target_y - self.y
+            dist = math.hypot(dx, dy)
+            if dist > 0:
+                self.x += int(dx/dist * speed)
+                self.y += int(dy/dist * speed)
+        
+        # Update octagon points
+        self.points = self._calculate_octagon_points(self.x, self.y, self.size)
+        self.canvas.coords(self.rect, *self.points)
+    
+    def get_position(self) -> Tuple[float, float]:
+        """Return the center coordinates of the boss for collision."""
+        return self.x, self.y
+    
+    def take_damage(self) -> bool:
+        """Reduce health by 1. Returns True if boss is still alive. Spawns minions on phase changes."""
+        self.health -= 1
+        self.spawn_counter += 1
+        
+        # Update color based on health phase
+        health_percent = self.health / self.max_health
+        if health_percent > 0.66:
+            color = '#FFD700'  # Gold
+        elif health_percent > 0.33:
+            color = '#FF8C00'  # Dark orange
+        else:
+            color = '#FF4500'  # Red-orange
+        
+        self.canvas.itemconfig(self.rect, fill=color)
+        
+        # Spawn minions at phase changes (every ~7 hits)
+        if self.spawn_counter >= 7:
+            self.spawn_counter = 0
+            return True  # Still alive, minions will be spawned by game
+        
+        return self.health > 0
+    
+    def get_phase(self) -> int:
+        """Get current boss phase based on health."""
+        health_percent = self.health / self.max_health
+        if health_percent > 0.66:
+            return 1
+        elif health_percent > 0.33:
+            return 2
+        else:
+            return 3
 
 
 class Particle:
@@ -669,21 +850,10 @@ class Shard:
                         enemy_dies = True
                 
                 if enemy_dies:
-                    # Remove enemy
-                    self.game.enemies.remove(enemy)
-                    self.game.canvas.delete(enemy.rect)
-                    self.game.score += 1
-                    self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
-                # Award XP for kill (7 for pentagon, 3 for triangle, 1 for regular)
-                if is_pentagon:
-                    xp_reward = 7
-                elif is_triangle:
-                    xp_reward = 3
-                else:
-                    xp_reward = 1
-                self.game.add_xp(xp_reward)
-                print(f"[ACTION] Enemy taking damage from black hole")
-                play_beep_async(250, 20, self.game)                # If explosive shrapnel, create explosion effect with more shards
+                    # Remove enemy and award XP
+                    self.game.create_death_poof(ex_center, ey_center)
+                    self.game.kill_enemy(enemy)
+                # If explosive shrapnel, create explosion effect with more shards
                 if self.explosive:
                     self.game.create_explosive_shrapnel(ex_center, ey_center)
                 
@@ -821,19 +991,14 @@ class Projectile:
             # Create poof effect
             self.game.create_death_poof(ex_center, ey_center)
             
-            # Check if it's a tank or triangle enemy (they take damage)
-            is_pentagon = isinstance(closest_enemy, PentagonEnemy)
-            is_triangle = isinstance(closest_enemy, TriangleEnemy)
-            enemy_dies = True
+            # All enemies can now take damage (sides = health)
+            # Triangle (3 sides) = 3 health, Square (4 sides) = 4 health, Pentagon (5 sides) = 5 health
+            enemy_dies = False  # Assume enemy survives by default
             
-            if is_pentagon or is_triangle:
-                # Tank/triangle enemy takes damage but might survive
-                if closest_enemy.take_damage():
-                    # Still alive after damage
-                    enemy_dies = False
-                    # Don't award XP until it actually dies
-                else:
-                    # Enemy is now dead
+            # Check if enemy has take_damage method (all do now)
+            if hasattr(closest_enemy, 'take_damage'):
+                if not closest_enemy.take_damage():
+                    # Enemy is now dead (take_damage returns False when health <= 0)
                     enemy_dies = True
             
             if enemy_dies:
@@ -841,28 +1006,43 @@ class Projectile:
                 if self.shrapnel_level > 0:
                     self.game.create_shrapnel(ex_center, ey_center, self.vx, self.vy, self.shrapnel_level)
                 
-                # Remove enemy
-                self.game.enemies.remove(closest_enemy)
-                self.game.canvas.delete(closest_enemy.rect)
-                self.game.score += 1
-                self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
+                # Handle hexagon split mechanic
+                if isinstance(closest_enemy, HexagonEnemy):
+                    # Spawn 3 triangle enemies that explode outward
+                    spawn_offset = 20
+                    for angle_offset in [0, 120, 240]:  # Spawn at 120 degree intervals
+                        angle_rad = math.radians(angle_offset)
+                        spawn_x = ex_center + int(spawn_offset * math.cos(angle_rad)) - ENEMY_SIZE_HALF
+                        spawn_y = ey_center + int(spawn_offset * math.sin(angle_rad)) - ENEMY_SIZE_HALF
+                        # Create new triangle enemy
+                        new_triangle = TriangleEnemy(self.game.canvas, spawn_x, spawn_y, ENEMY_SIZE)
+                        # Give triangle an outward velocity for the "pop" effect
+                        new_triangle.pop_velocity_x = math.cos(angle_rad) * 4.0  # Outward velocity
+                        new_triangle.pop_velocity_y = math.sin(angle_rad) * 4.0
+                        new_triangle.pop_distance = 0  # Track distance traveled in pop
+                        new_triangle.pop_distance_max = 60  # Pop for 60 pixels
+                        self.game.enemies.append(new_triangle)
+                        print(f"[ACTION] Hexagon split into triangles")
                 
-                # Award XP for kill (7 for pentagon, 3 for triangle, 1 for regular)
-                if is_pentagon:
-                    xp_reward = 7
-                elif is_triangle:
-                    xp_reward = 3
-                else:
-                    xp_reward = 1
-                self.game.add_xp(xp_reward)
+                # Handle boss defeat - boss does not split, just dies
+                if isinstance(closest_enemy, BossEnemy):
+                    print(f"[BOSS] Boss defeated!")
+                
+                # Remove enemy and award XP using game's method
+                self.game.kill_enemy(closest_enemy)
                 
                 # Play kill sound asynchronously
                 print(f"[ACTION] Projectile killed enemy")
                 play_beep_async(250, 20, self.game)
             else:
-                # Enemy took damage but survived - create shrapnel anyway if upgrade active
+                # Enemy took damage but survived
                 if self.shrapnel_level > 0:
                     self.game.create_shrapnel(ex_center, ey_center, self.vx, self.vy, self.shrapnel_level)
+                
+                # Award partial XP for hitting boss even if it survives
+                if isinstance(closest_enemy, BossEnemy):
+                    xp_reward = 1  # Small XP for each hit on boss
+                    self.game.add_xp(xp_reward)
             
             # Mark as hit
             self.hit_enemies.add(id(closest_enemy))
@@ -1081,20 +1261,8 @@ class Projectile:
             if self.shrapnel_level > 0:
                 self.game.create_shrapnel(tx_center, ty_center, self.vx, self.vy, self.shrapnel_level)
             
-            # Remove enemy
-            self.game.enemies.remove(target_enemy)
-            self.game.canvas.delete(target_enemy.rect)
-            self.game.score += 1
-            self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
-            
-            # Award XP for kill (7 for pentagon, 3 for triangle, 1 for regular)
-            if is_pentagon:
-                xp_reward = 7
-            elif is_triangle:
-                xp_reward = 3
-            else:
-                xp_reward = 1
-            self.game.add_xp(xp_reward)
+            # Remove enemy and award XP
+            self.game.kill_enemy(target_enemy)
             
             # Play kill sound asynchronously
             print(f"[ACTION] Chain lightning killed enemy")
@@ -1464,7 +1632,7 @@ class Minion:
         
         if dist > 0:
             # Create minion projectile
-            projectile_speed = 12
+            projectile_speed = 6  # Scaled down for 20ms game tick (was 12 for faster ticks)
             vx = (dx / dist) * projectile_speed
             vy = (dy / dist) * projectile_speed
             
@@ -1602,19 +1770,8 @@ class MinionProjectile:
                 
                 if enemy_dies:
                     # Remove enemy and award XP
-                    self.game.enemies.remove(enemy)
-                    self.game.canvas.delete(enemy.rect)
-                    self.game.score += 1
-                    self.game.canvas.itemconfig(self.game.score_text, text=str(self.game.score))
-                    
-                    # Award XP for kill
-                    if is_pentagon:
-                        xp_reward = 7
-                    elif is_triangle:
-                        xp_reward = 3
-                    else:
-                        xp_reward = 1
-                    self.game.add_xp(xp_reward)
+                    self.game.create_death_poof(ex_center, ey_center)
+                    self.game.kill_enemy(enemy)
                 
                 # Projectile despawns after hit
                 return False

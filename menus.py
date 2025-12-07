@@ -37,6 +37,7 @@ class MenuManager:
         self.dev_menu_active: bool = False
         self.dev_menu_elements: List[int] = []
         self.dev_buttons: Dict[str, int] = {}
+        self.dev_submenu_active: bool = False  # Track if a submenu is showing
 
     def show_upgrade_menu(self) -> None:
         """Display upgrade selection menu with three random choices."""
@@ -345,23 +346,6 @@ class MenuManager:
         self.pause_menu_elements.append(self.pause_buttons['music'])
         self.pause_menu_elements.append(music_text)
         
-        # Keyboard layout toggle button
-        keyboard_btn_y = music_btn_y + 60
-        keyboard_layout_display = self.game.keyboard_layout.upper()
-        self.pause_buttons['keyboard'] = self.canvas.create_rectangle(
-            overlay_x + 40, keyboard_btn_y,
-            overlay_x + overlay_width - 40, keyboard_btn_y + 40,
-            fill='#7a4a7a', outline='white', width=2
-        )
-        keyboard_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, keyboard_btn_y + 20,
-            text=f'Layout: {keyboard_layout_display}',
-            fill='white',
-            font=('Arial', 16)
-        )
-        self.pause_menu_elements.append(self.pause_buttons['keyboard'])
-        self.pause_menu_elements.append(keyboard_text)
-        
         # Hidden dev button (tiny, in corner)
         self.pause_buttons['dev'] = self.canvas.create_rectangle(
             overlay_x + overlay_width - 25, overlay_y,
@@ -437,8 +421,8 @@ class MenuManager:
         canvas_width = int(self.canvas.winfo_width())
         canvas_height = int(self.canvas.winfo_height())
         menu_width = int(canvas_width * 0.2)  # 20% of canvas width
-        # Height: title (20) + 13 buttons (35 each) + spacing (5*13) + padding (40) = 575
-        menu_height = 575
+        # Height: title (20) + 14 buttons (35 each) + spacing (5*14) + padding (40) = 610
+        menu_height = 610
         overlay_x = (canvas_width - menu_width) // 2
         overlay_y = (canvas_height - menu_height) // 2
         overlay_width = menu_width
@@ -474,7 +458,79 @@ class MenuManager:
             ('Level Up', 'level_up', '#8a4a4a'),
             ('Add 100 XP', 'add_xp', '#8a4a4a'),
             ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
+            ('Spawn Enemy', 'spawn_enemy_submenu', '#4a8a4a'),
             ('Back', 'back_to_pause', '#4a4a4a'),
+        ]
+        
+        button_width = overlay_width - 40
+        button_height = 35
+        button_spacing = 5
+        start_y = overlay_y + 55
+        
+        for i, (label, action, color) in enumerate(buttons):
+            btn_y = start_y + i * (button_height + button_spacing)
+            
+            btn_x1 = int(overlay_x + 20)
+            btn_y1 = int(btn_y)
+            btn_x2 = int(overlay_x + 20 + button_width)
+            btn_y2 = int(btn_y + button_height)
+            
+            btn_id = self.canvas.create_rectangle(
+                btn_x1, btn_y1,
+                btn_x2, btn_y2,
+                fill=color, outline='white', width=1
+            )
+            self.dev_buttons[action] = btn_id
+            self.dev_menu_elements.append(btn_id)
+            
+            text_id = self.canvas.create_text(
+                overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
+                text=label,
+                fill='white',
+                font=('Arial', 12)
+            )
+            self.dev_menu_elements.append(text_id)
+
+    def show_enemy_spawn_submenu(self) -> None:
+        """Display the enemy spawn submenu."""
+        self.dev_submenu_active = True
+        
+        # Create overlay
+        canvas_width = int(self.canvas.winfo_width())
+        canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.2)
+        # Height: title (20) + 6 buttons (35 each) + spacing (5*6) + padding (40) = 275
+        menu_height = 275
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+        overlay_width = menu_width
+        overlay_height = menu_height
+        
+        # Background rectangle
+        overlay_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + overlay_width, overlay_y + overlay_height,
+            fill='#1a1a3e', outline='cyan', width=3
+        )
+        self.dev_menu_elements.append(overlay_id)
+        
+        # Title
+        title = self.canvas.create_text(
+            overlay_x + overlay_width // 2, overlay_y + 20,
+            text='SPAWN ENEMY',
+            fill='cyan',
+            font=('Arial', 18, 'bold')
+        )
+        self.dev_menu_elements.append(title)
+        
+        # Button definitions: (label, action, color)
+        buttons = [
+            ('Triangle', 'spawn_triangle', '#4a8a4a'),
+            ('Square', 'spawn_square', '#4a8a4a'),
+            ('Pentagon', 'spawn_pentagon', '#4a8a4a'),
+            ('Hexagon', 'spawn_hexagon', '#4a8a4a'),
+            ('Boss', 'spawn_boss', '#8a4a4a'),
+            ('Back', 'back_to_dev_menu', '#4a4a4a'),
         ]
         
         button_width = overlay_width - 40
@@ -533,6 +589,44 @@ class MenuManager:
                 self.game.add_xp(100)
             elif action == 'spawn_enemies_cmd':
                 self.game.respawn_enemies(30)
+            elif action == 'spawn_enemy_submenu':
+                # Show the enemy spawn submenu
+                for element_id in self.dev_menu_elements:
+                    try:
+                        self.canvas.delete(element_id)
+                    except tk.TclError:
+                        pass
+                self.dev_menu_elements = []
+                self.dev_buttons = {}
+                self.show_enemy_spawn_submenu()
+                return
+            elif action == 'spawn_triangle':
+                self.game.spawn_enemy('triangle')
+                print(f"[DEV] Triangle spawned")
+            elif action == 'spawn_square':
+                self.game.spawn_enemy('square')
+                print(f"[DEV] Square spawned")
+            elif action == 'spawn_pentagon':
+                self.game.spawn_enemy('pentagon')
+                print(f"[DEV] Pentagon spawned")
+            elif action == 'spawn_hexagon':
+                self.game.spawn_enemy('hexagon')
+                print(f"[DEV] Hexagon spawned")
+            elif action == 'spawn_boss':
+                self.game.spawn_enemy('boss')
+                print(f"[DEV] Boss spawned")
+            elif action == 'back_to_dev_menu':
+                # Return to main dev menu from submenu
+                for element_id in self.dev_menu_elements:
+                    try:
+                        self.canvas.delete(element_id)
+                    except tk.TclError:
+                        pass
+                self.dev_menu_elements = []
+                self.dev_buttons = {}
+                self.dev_submenu_active = False
+                self.show_dev_menu()
+                return
             elif action == 'back_to_pause':
                 self.close_dev_menu()
                 return
@@ -547,7 +641,11 @@ class MenuManager:
             
             self.dev_menu_elements = []
             self.dev_buttons = {}
-            self.show_dev_menu()
+            if self.dev_submenu_active:
+                self.dev_submenu_active = False
+                self.show_dev_menu()
+            else:
+                self.show_dev_menu()
         except Exception as e:
             print(f"Error in dev action '{action}': {e}")
 
@@ -610,8 +708,6 @@ class MenuManager:
                         self.toggle_sound()
                     elif action == 'music':
                         self.toggle_music()
-                    elif action == 'keyboard':
-                        self.toggle_keyboard_layout()
                     elif action == 'dev':
                         self.show_dev_menu()
                     return

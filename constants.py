@@ -46,39 +46,44 @@ WAVE_SPAWN_INTERVAL: int = 5000  # Default milliseconds between wave spawns (5 s
 
 # Wave-based level progression. Each level has waves of enemies.
 # Wave format: (enemy_type, count, spawn_delay_ms)
-# enemy_type: 'basic' (0), 'triangle' (1), 'pentagon' (2)
+# enemy_type: 'square' (4-sided, basic), 'triangle' (3-sided, weak), 'pentagon' (5-sided, strong), 'hexagon' (6-sided, splits into 2 triangles)
+# Difficulty scales with: triangle(1hp) < circle(1hp) < square(4hp) < pentagon(5hp) < hexagon(6hp, splits)
 GAME_LEVEL_WAVES: Dict[int, list] = {
-    # Level 1: Simple intro - one batch of basic enemies
-    1: [('basic', 10, 0)],
+    # Level 1-2: Intro - all triangles to learn mechanics
+    1: [('triangle', 20, 0)],
+    2: [('triangle', 30, 0)],
     
-    # Level 2-3: Slightly more enemies
-    2: [('basic', 12, 0)],
-    3: [('basic', 15, 0), ('basic', 8, 0)],
+    # Level 3-4: Introduce squares
+    3: [('triangle', 30, 0), ('square', 15, 0)],
+    4: [('triangle', 25, 0), ('square', 25, 0)],
     
-    # Level 4-6: Introduction to harder enemies
-    4: [('basic', 18, 0), ('basic', 12, 0)],
-    5: [('basic', 15, 0), ('triangle', 5, 0)],
-    6: [('basic', 12, 0), ('triangle', 8, 0), ('basic', 10, 0)],
+    # Level 5-6: More squares, mixed waves
+    5: [('square', 35, 0), ('triangle', 20, 0)],
+    6: [('square', 30, 0), ('triangle', 25, 0), ('square', 25, 0)],
     
-    # Level 7-10: More mixed waves
-    7: [('basic', 15, 0), ('triangle', 6, 0), ('basic', 12, 0)],
-    8: [('triangle', 10, 0), ('basic', 18, 0), ('triangle', 5, 0)],
-    9: [('basic', 18, 0), ('triangle', 8, 0), ('pentagon', 3, 0)],
-    10: [('triangle', 12, 0), ('pentagon', 5, 0), ('triangle', 8, 0)],
+    # Level 7-9: Squares dominate, introduce pentagons
+    7: [('square', 45, 0), ('triangle', 15, 0)],
+    8: [('square', 35, 0), ('square', 25, 0), ('pentagon', 8, 0)],
+    9: [('square', 40, 0), ('pentagon', 12, 0), ('triangle', 20, 0)],
     
-    # Level 11-15: Harder difficulty with more enemy types
-    11: [('basic', 18, 0), ('triangle', 10, 0), ('pentagon', 4, 0), ('basic', 12, 0)],
-    12: [('triangle', 15, 0), ('pentagon', 6, 0), ('triangle', 10, 0), ('basic', 15, 0)],
-    13: [('pentagon', 6, 0), ('triangle', 15, 0), ('pentagon', 5, 0), ('triangle', 12, 0)],
-    14: [('basic', 20, 0), ('pentagon', 8, 0), ('triangle', 12, 0), ('pentagon', 4, 0)],
-    15: [('triangle', 18, 0), ('pentagon', 8, 0), ('triangle', 15, 0), ('pentagon', 6, 0)],
+    # Level 10-12: Pentagon presence increases, introduce hexagons
+    10: [('square', 35, 0), ('pentagon', 15, 0), ('square', 30, 0)],
+    11: [('pentagon', 20, 0), ('square', 35, 0), ('hexagon', 8, 0), ('triangle', 20, 0)],
+    12: [('square', 40, 0), ('pentagon', 25, 0), ('hexagon', 12, 0)],
     
-    # Level 16-20: High difficulty with many waves and hordes
-    16: [('pentagon', 8, 0), ('triangle', 18, 0), ('pentagon', 10, 0), ('triangle', 15, 0), ('basic', 18, 0)],
-    17: [('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 18, 0), ('pentagon', 8, 0), ('triangle', 15, 0)],
-    18: [('pentagon', 10, 0), ('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 18, 0), ('pentagon', 8, 0)],
-    19: [('triangle', 25, 0), ('pentagon', 15, 0), ('triangle', 20, 0), ('pentagon', 10, 0), ('triangle', 18, 0)],
-    20: [('pentagon', 15, 0), ('triangle', 25, 0), ('pentagon', 15, 0), ('triangle', 20, 0), ('pentagon', 12, 0), ('triangle', 20, 0)],
+    # Level 13-15: Hexagons ramp up, pentagons provide support
+    13: [('hexagon', 15, 0), ('pentagon', 30, 0), ('square', 40, 0)],
+    14: [('hexagon', 20, 0), ('pentagon', 30, 0), ('square', 45, 0), ('hexagon', 8, 0)],
+    15: [('hexagon', 25, 0), ('pentagon', 40, 0), ('square', 50, 0)],
+    
+    # Level 16-20: Endgame - CHAOS! Heavy on hexagons creating split chains
+    16: [('hexagon', 30, 0), ('pentagon', 40, 0), ('hexagon', 15, 0), ('square', 50, 0)],
+    17: [('hexagon', 40, 0), ('pentagon', 50, 0), ('hexagon', 20, 0), ('square', 60, 0)],
+    18: [('hexagon', 50, 0), ('pentagon', 60, 0), ('hexagon', 30, 0), ('square', 70, 0)],
+    19: [('hexagon', 60, 0), ('pentagon', 70, 0), ('hexagon', 40, 0), ('square', 80, 0)],
+    20: [('hexagon', 70, 0), ('pentagon', 80, 0), ('hexagon', 50, 0), ('square', 100, 0)],
+    # Level 21: Boss fight - no other enemies
+    21: [],  # Boss spawned separately in _start_boss_fight()
 }
 
 # ============================================================================
@@ -138,15 +143,21 @@ LINKED_UPGRADES: Dict[str, Dict[str, Any]] = {
 # ============================================================================
 BLACK_HOLE_TRIGGER_CHANCE: float = 0.15  # 15% chance per hit at level 1
 BLACK_HOLE_BASE_RADIUS: int = 40  # Base radius of black hole effect
-BLACK_HOLE_PULL_STRENGTH: int = 6  # Speed at which enemies get pulled in (scaled for 50 FPS logic)
+BLACK_HOLE_PULL_STRENGTH: int = 2.4  # Speed at which enemies get pulled in (scaled for 20ms tick rate)
 BLACK_HOLE_PULL_DURATION: int = 3000  # Milliseconds that black hole pulls enemies (3 seconds)
-BLACK_HOLE_PULL_STRENGTH_MIN: int = 5  # Minimum pull strength at radius edge to prevent getting stuck
+BLACK_HOLE_PULL_STRENGTH_MIN: int = 2  # Minimum pull strength at radius edge to prevent getting stuck
 
 # ============================================================================
 # PARTICLE & EFFECT CONFIGURATION
 # ============================================================================
 PARTICLE_COUNT: int = 5  # Particles in death poof effect (reduced from 8 for performance)
 PARTICLE_LIFE: int = 15  # Frames until particle dies
+
+# ============================================================================
+# WEAPON & ATTACK CONFIGURATION
+# ============================================================================
+WEAPON_COOLDOWN_MS: int = 200  # Milliseconds between main weapon attacks (5 per second)
+WEAPON_RETURN_COOLDOWN_MS: int = 1000  # Cooldown after projectile returns (scales with rapid fire)
 
 # ============================================================================
 # SOUND CONFIGURATION

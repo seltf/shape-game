@@ -34,7 +34,7 @@ def analyze_difficulty():
             num_waves = len(waves)
             
             # Count by enemy type
-            basic = sum(wave[1] for wave in waves if wave[0] == 'basic')
+            square = sum(wave[1] for wave in waves if wave[0] == 'square')
             triangle = sum(wave[1] for wave in waves if wave[0] == 'triangle')
             pentagon = sum(wave[1] for wave in waves if wave[0] == 'pentagon')
             
@@ -44,7 +44,7 @@ def analyze_difficulty():
             
             print(f"Level {level}:")
             print(f"  Total Enemies: {total_enemies}")
-            print(f"  - Basic:    {basic}")
+            print(f"  - Square:   {square}")
             print(f"  - Triangle: {triangle}")
             print(f"  - Pentagon: {pentagon}")
             print(f"  Number of Waves: {num_waves}")

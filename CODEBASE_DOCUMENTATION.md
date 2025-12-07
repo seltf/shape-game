@@ -79,8 +79,9 @@ self.is_resting, self.level_rest_timer  # Rest period tracking between levels
 - Health/shield management
 
 **Projectile**
-- Fires from player toward enemies
-- 0.5-second lifetime before returning to player
+- Fires from player toward enemies with cooldown system
+- Default 1-second cooldown after projectile returns (reduced by Rapid Fire upgrades)
+- ~500ms lifetime before returning to player
 - Homing behavior (seeks closest enemy)
 - Chain lightning capability (bounces between enemies)
 - Splits into mini-forks on certain hits
@@ -88,9 +89,11 @@ self.is_resting, self.level_rest_timer  # Rest period tracking between levels
 - **Critical Fix:** Uses `self.canvas.winfo_width/height()` for bounds checking (not global WIDTH/HEIGHT)
 
 **Enemy Types**
-- `Enemy`: Basic circular enemy (1 health, 1 XP)
-- `TriangleEnemy`: Purple triangle (3 health, 3 XP, slower)
-- `PentagonEnemy`: Green pentagon (5 health, 7 XP, slowest)
+- `Enemy`/`CircleEnemy`: Basic circular enemy (1 health, 2 XP, speed 2 px/frame)
+- `TriangleEnemy`: Purple triangle (1 health, 1 XP, speed 2 px/frame)
+- `SquareEnemy`: Red square (4 health, 2 XP, speed 2 px/frame)
+- `PentagonEnemy`: Green pentagon (5 health, 3 XP, speed 1 px/frame)
+- `HexagonEnemy`: Cyan hexagon (6 health, 4 XP, speed 2 px/frame, splits into 2 triangles)
 
 **Particle**
 - Visual effects (death poof, explosions)
@@ -122,7 +125,7 @@ self.is_resting, self.level_rest_timer  # Rest period tracking between levels
 - Travels in straight line at constant velocity
 - Despawns after 3 seconds or when off-screen
 - Deals 1 damage to basic enemies, reduces tank health by 1
-- Awards same XP as player projectiles (1/3/7 based on enemy type)
+- Awards same XP as player projectiles (1 for triangle, 2 for square/circle, 3 for pentagon, 4 for hexagon)
 - Cannot bounce or chain like player projectiles
 
 **Key Methods in All Entities:**
@@ -234,9 +237,10 @@ See [Game Level Progression System](#game-level-progression-system) section for 
 
 **Key Function:**
 - `play_beep_async(frequency, duration, game)`: Play beep in background thread
-  - Frequency: Hz (250 for hit, 500 for attack, 120 for explosion)
+  - Frequency: Hz (250 for hit, 400 for attack, 120 for explosion)
   - Duration: milliseconds
   - Uses threading to prevent blocking game loop
+  - Unthrottled rapid fire to support weapon cooldown system
 
 ---
 
@@ -271,11 +275,11 @@ python test_level_progression.py
 
 ## Game Loop Architecture
 
-### Update Sequence (Every 50ms)
+### Update Sequence (Every 20ms)
 ```
 update() called
 ├─ handle_player_movement()          # Check pressed keys, apply acceleration
-├─ move_enemies()                    # Update enemy positions
+├─ move_enemies()                    # Update enemy positions (speed: 1-2 px/frame)
 ├─ check_player_collision()          # Detect enemy-player hits
 ├─ update_particles()                # Update & remove dead particles
 ├─ update_shards()                   # Update shrapnel, check for hits
@@ -284,10 +288,11 @@ update() called
 ├─ update_minions()                  # Update minions, handle AI & attacks
 ├─ update_minion_projectiles()       # Update minion projectiles, check hits
 ├─ update_ammo_orbs()                # Update ammo drops (future feature)
-├─ update_dash_cooldown()            # Cooldown tick for dash ability
 ├─ update_shield_cooldown()          # Cooldown tick for shield
 └─ update_game_level_progression()   # Update wave timers, spawn next wave/level
 ```
+
+**Note:** Attack cooldown (600ms default) is enforced immediately when you fire, scaled by Rapid Fire upgrades.
 
 ### Event Handlers
 - `on_key_press()`: Store pressed key in `self.pressed_keys` set; handle special keys (E for auto-fire toggle, Escape for menu)
@@ -298,7 +303,7 @@ update() called
 ### Player Controls
 
 **Movement Controls (Layout-Independent)**
-- **W / Comma (Dvorak) / Up Arrow**: Move up
+- **W / Comma (Dvorak) / Up Arrow**: Move up (player max speed: 3 px/frame)
 - **A**: Move left
 - **S / O (Dvorak) / Down Arrow**: Move down
 - **D / E (Dvorak) / Right Arrow**: Move right
@@ -310,13 +315,23 @@ update() called
 **System Controls**
 - **Escape**: Open/close pause menu
 
+**Weapon Cooldown System**
+- Main weapon fires on cooldown immediately after attacking
+- Default cooldown: 600ms (allows firing every ~600ms)
+- Cooldown is applied when you fire, not when projectile returns
+- Regardless of range, the cooldown is the same (close range doesn't "charge up" faster)
+- Rapid Fire upgrade reduces cooldown by scaling with return_speed multiplier:
+  - Each Rapid Fire level: 2x return_speed → 2x faster cooldown recovery
+  - Example: Rapid Fire Level 1 reduces cooldown to 300ms
+- Prevents weapon from being overpowered at close range while maintaining good DPS
+
 **Auto-Fire Feature**
 - Pressing Spacebar toggles auto-fire mode on/off
-- When enabled, projectiles fire automatically every 500ms
+- When enabled, projectiles fire automatically respecting cooldown
 - Auto-fire respects normal firing rules:
   - Cannot fire while paused or upgrade menu is open
   - Cannot fire while a main projectile is already active
-  - Respects the 500ms attack cooldown between shots
+  - Respects the attack cooldown (600ms default, scales with Rapid Fire)
 - Console displays "Auto-fire ENABLED" or "Auto-fire DISABLED" when toggled
 
 ---
@@ -359,7 +374,7 @@ self.window_height = self.canvas.winfo_height()
 
 ### Overview
 
-The game progresses through 20+ predefined difficulty levels with carefully designed wave patterns. Each level contains multiple waves of enemies that spawn at specific intervals, giving players time to react and strategize. After completing all waves in a level, there's a 3-second rest period before advancing to the next level.
+The game progresses through 20+ predefined difficulty levels with carefully designed wave patterns. Each level contains multiple waves of enemies that spawn at specific intervals, giving players time to react and strategize. **All wave enemy counts have been doubled to increase difficulty**, creating a more challenging progression. After completing all waves in a level, there's a 3-second rest period before advancing to the next level.
 
 ### How Wave Progression Works
 
@@ -918,11 +933,20 @@ def cleanup(self):
 **⚠️ CRITICAL: DOCUMENTATION MAINTENANCE**
 
 **ANY AI agent working on this codebase MUST update CODEBASE_DOCUMENTATION.md whenever:**
+- Game balance changes (enemy stats, damage, speed, XP rewards)
 - New features are added (upgrades, entities, mechanics)
 - Game architecture changes
 - New modules or significant refactoring occurs
 - Coordinate system behavior changes
 - New common patterns or best practices emerge
+- Cooldown or timing systems are modified
+
+**Recent Updates (Dec 2025):**
+- Doubled enemy spawn counts across all levels
+- Slowed enemy movement speeds (1-2 px/frame, player: 3 px/frame)
+- Rebalanced XP rewards by enemy type (1-4 XP based on difficulty)
+- Implemented weapon cooldown system (600ms default, scales with Rapid Fire upgrades)
+- Projectile cooldown now enforced AFTER return, not on firing
 
 **The documentation is the contract between developers. Stale documentation leads to duplicated bugs and wasted time. ALWAYS keep docs current with code changes.**
 
@@ -944,8 +968,10 @@ When an AI agent is tasked with modifying, debugging, or expanding this codebase
    - If a test fails, the change likely introduced a bug
 
 3. **Check Physics Constants**
-   - Verify collision distance squared: `COLLISION_DISTANCE_SQ = 1024`
-   - Verify enemy sizes: `ENEMY_SIZE_HALF = 20`
+   - Verify collision distance squared: `COLLISION_DISTANCE_SQ = 900`
+   - Verify enemy sizes: `ENEMY_SIZE_HALF = 10`
+   - Verify weapon cooldown: `WEAPON_RETURN_COOLDOWN_MS = 600` (600ms default)
+   - Verify enemy speeds: 1-2 px/frame, player: 3 px/frame max
    - Never hardcode these values in entity code
    - Import from `constants.py` instead
 
@@ -1024,11 +1050,15 @@ Use squared distances to avoid expensive `sqrt()` calls:
 
 ```python
 # CORRECT: Use squared distance
+from constants import COLLISION_DISTANCE_SQ, ENEMY_SIZE_HALF
+
 closest_dist_sq = COLLISION_DISTANCE_SQ
 for enemy in self.game.enemies:
     ex, ey = enemy.get_position()
-    dx = ex - self.x
-    dy = ey - self.y
+    ex_center = ex + ENEMY_SIZE_HALF
+    ey_center = ey + ENEMY_SIZE_HALF
+    dx = ex_center - self.x
+    dy = ey_center - self.y
     dist_sq = dx * dx + dy * dy  # No sqrt!
     
     if dist_sq < closest_dist_sq:
@@ -1038,6 +1068,8 @@ for enemy in self.game.enemies:
 # ONLY use sqrt when necessary for physics:
 dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
 ```
+
+**Important:** Center positions for collision by adding `ENEMY_SIZE_HALF` to get true circle center.
 
 ### Canvas Operations Safety
 
@@ -1078,7 +1110,7 @@ dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
 
 #### Adding a New Upgrade
 
-1. Define in `constants.py`:
+1. Define in `constants.py` WEAPON_UPGRADES dict:
    ```python
    'my_upgrade': {
        'name': 'My Upgrade Name',
@@ -1088,21 +1120,29 @@ dist = math.hypot(dx, dy)  # More accurate than sqrt(dx²+dy²)
    }
    ```
 
-2. Add stat computation in `top_down_game.py`:
+2. Add stat computation in `compute_weapon_stats()` in `top_down_game.py`:
    ```python
-   def compute_weapon_stats(self) -> None:
+   def compute_weapon_stats(self) -> Dict[str, Any]:
        # ... existing code ...
        level = self.active_upgrades.count('my_upgrade')
        if level > 0:
            stats['my_stat'] = base_value + (level * bonus_per_level)
+       return stats
    ```
 
-3. Use in entity or attack logic:
+3. **Important:** For cooldown-affecting upgrades (like Rapid Fire):
+   - Cooldown is scaled by `return_speed / 20.0` (base multiplier)
+   - Example: Rapid Fire Level 1 sets `return_speed = 40`, so:
+     - Cooldown = `WEAPON_RETURN_COOLDOWN_MS / (return_speed / 20) = 1000 / 2 = 500ms`
+   - Each level of Rapid Fire doubles return speed → halves cooldown
+   - Check `top_down_game.py` around line 760 for implementation
+
+4. Use in entity or attack logic:
    ```python
    my_value = self.game.computed_weapon_stats.get('my_stat', default_value)
    ```
 
-4. Test with dev menu (Alt+D) before committing
+5. Test with dev menu (Alt+D) before committing
 
 #### Adding a New Entity Type
 
