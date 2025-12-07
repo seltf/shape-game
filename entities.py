@@ -547,15 +547,15 @@ class PentagonEnemy:
         self.shield_immunity: int = 0  # Frames of immunity after shield hit
         # Draw pentagon using create_polygon
         self.points: List[float] = self._calculate_pentagon_points(x, y, size)
-        self.rect: int = self.canvas.create_polygon(*self.points, fill='purple')
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='purple', outline='#FF00FF', width=2)
     
     def _calculate_pentagon_points(self, x: float, y: float, size: int) -> List[float]:
         """Calculate the 5 points of a regular pentagon."""
         points: List[float] = []
         for i in range(5):
             angle = (2 * math.pi * i / 5) - (math.pi / 2)  # Start from top
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
@@ -631,8 +631,8 @@ class HexagonEnemy:
         points: List[float] = []
         for i in range(6):
             angle = (2 * math.pi * i / 6)  # Start from right, 60 degrees apart
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
@@ -712,8 +712,8 @@ class BossEnemy:
         points: List[float] = []
         for i in range(8):
             angle = (2 * math.pi * i / 8) - (math.pi / 8)  # Rotated 22.5 degrees
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     

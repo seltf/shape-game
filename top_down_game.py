@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional, Tuple
 # Import from separate modules
 from constants import *
 from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
+from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, HexagonEnemy, BossEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
 from collision import CollisionDetector, PlayerCollisionHandler
@@ -514,6 +515,8 @@ class Game:
         spawn_y = max(ENEMY_SIZE_HALF, min(self.window_height - ENEMY_SIZE_HALF, spawn_y))
         
         self._spawn_enemy_by_type(spawn_x, spawn_y, enemy_type)
+
+
     
     def respawn_enemies(self, count: int) -> None:
         """Spawn a batch of enemies for dev/testing purposes."""
@@ -585,6 +588,11 @@ class Game:
                 self.start_game_from_menu()
                 return
             
+            # If main menu is active, any click starts the game
+            if self.main_menu_active:
+                self.start_game_from_menu()
+                return
+            
             # If game over screen is showing, handle restart button click
             if self.game_over_active:
                 if self.game_over_restart_btn is not None:
@@ -632,6 +640,55 @@ class Game:
     def close_upgrade_menu(self):
         """Close the upgrade menu."""
         self.menu_manager.close_upgrade_menu()
+
+    def show_main_menu(self):
+        """Display the main menu at game start."""
+        self.main_menu_active = True
+        self.canvas.delete('all')
+        self._draw_starfield()
+        
+        # Title
+        self.canvas.create_text(
+            self.window_width // 2, self.window_height // 2 - 100,
+            text='SHAPE GAME',
+            fill='cyan',
+            font=('Arial', 64, 'bold')
+        )
+        
+        # Subtitle
+        self.canvas.create_text(
+            self.window_width // 2, self.window_height // 2 - 20,
+            text='Click to Start or Press SPACE',
+            fill='lime',
+            font=('Arial', 24)
+        )
+        
+        # Store references for click detection
+        self.main_menu_start_rect = None
+
+    def start_game_from_menu(self):
+        """Start the game after main menu."""
+        if not self.game_started:
+            self.game_started = True
+            self.main_menu_active = False
+            self.canvas.delete('all')
+            self._draw_starfield()
+            
+            # Recreate player's canvas item (it was deleted by canvas.delete('all'))
+            self.player.rect = self.canvas.create_oval(
+                self.player.x - self.player.size//2, self.player.y - self.player.size//2,
+                self.player.x + self.player.size//2, self.player.y + self.player.size//2,
+                fill='blue'
+            )
+            
+            # Reinitialize game UI
+            self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
+            self.version_text = self.canvas.create_text(10, self.window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
+            self.level_text = self.canvas.create_text(self.window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
+            self.xp_text = self.canvas.create_text(self.window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
+            self.game_level_text = self.canvas.create_text(self.window_width//2, 130, anchor='n', fill='orange', font=('Arial', 16), text=f"Game Level: {self.game_level}")
+            self.timer_text = self.canvas.create_text(self.window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
+            self.start_game_level()
 
     def show_main_menu(self):
         """Display the main menu at game start."""
@@ -775,6 +832,12 @@ class Game:
                 self.start_game_from_menu()
                 return
             # Otherwise toggle auto-fire
+        if event.keysym == 'space':  # Spacebar
+            # If main menu is active, start the game
+            if self.main_menu_active:
+                self.start_game_from_menu()
+                return
+            # Otherwise toggle auto-fire
             self.auto_fire_enabled = not self.auto_fire_enabled
             print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
             return
@@ -796,11 +859,16 @@ class Game:
             # If upgrade menu is open, close it without resuming, then open pause menu
             elif self.menu_manager.upgrade_menu_active:
                 self.menu_manager.close_upgrade_menu(resume_game=False)
+                self.show_pause_menu()
+            # If upgrade menu is open, close it without resuming, then open pause menu
+            elif self.menu_manager.upgrade_menu_active:
+                self.menu_manager.close_upgrade_menu(resume_game=False)
                 self.paused = False  # Ensure paused state is reset before opening pause menu
                 self.show_pause_menu()
             # If pause menu is open, close it (resume game)
             elif self.paused:
                 self.hide_pause_menu()
+            # Otherwise, open pause menu
             # Otherwise, open pause menu
             else:
                 self.show_pause_menu()
@@ -809,9 +877,14 @@ class Game:
         # Use layout-independent keysym map for movement controls
         if event.keysym in self.KEYSYM_MAP:
             self.pressed_keys.add(self.KEYSYM_MAP[event.keysym])
+        # Use layout-independent keysym map for movement controls
+        if event.keysym in self.KEYSYM_MAP:
+            self.pressed_keys.add(self.KEYSYM_MAP[event.keysym])
 
     def on_key_release(self, event):
         """Handle key release events for movement."""
+        if event.keysym in self.KEYSYM_MAP:
+            self.pressed_keys.discard(self.KEYSYM_MAP[event.keysym])
         if event.keysym in self.KEYSYM_MAP:
             self.pressed_keys.discard(self.KEYSYM_MAP[event.keysym])
     
@@ -819,6 +892,7 @@ class Game:
 
     def on_window_focus_out(self, event):
         """Pause game when window loses focus."""
+        if not self.paused and not self.game_over_active and not self.main_menu_active:
         if not self.paused and not self.game_over_active and not self.main_menu_active:
             self.show_pause_menu()
 
@@ -848,6 +922,8 @@ class Game:
 
     def update_logic(self):
         """Main game logic loop: updates game state at 50 FPS (20ms)."""
+        # Don't run game logic if main menu is active
+        if self.main_menu_active or self.paused:
         # Don't run game logic if main menu is active
         if self.main_menu_active or self.paused:
             return
