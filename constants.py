@@ -2,6 +2,19 @@
 Game constants - centralized configuration for Top Down Game
 """
 from typing import Dict, Any
+from enum import Enum, auto
+
+# ============================================================================
+# GAME STATE MACHINE
+# ============================================================================
+class GameState(Enum):
+    """Enumeration of all possible game states."""
+    MAIN_MENU = auto()      # Showing main menu
+    PLAYING = auto()        # Active gameplay
+    PAUSED = auto()         # Game paused
+    UPGRADE_MENU = auto()   # Showing upgrade selection
+    DEV_MENU = auto()       # Developer menu open
+    GAME_OVER = auto()      # Game over screen
 
 # ============================================================================
 # VERSION
@@ -152,6 +165,16 @@ BLACK_HOLE_PULL_STRENGTH_MIN: int = 2  # Minimum pull strength at radius edge to
 # ============================================================================
 PARTICLE_COUNT: int = 5  # Particles in death poof effect (reduced from 8 for performance)
 PARTICLE_LIFE: int = 15  # Frames until particle dies
+
+# ============================================================================
+# PERFORMANCE OPTIMIZATION
+# ============================================================================
+SPATIAL_GRID_CELL_SIZE: int = 100  # Size of each grid cell for spatial partitioning
+MAX_POOLED_PARTICLES: int = 200  # Maximum particles to keep in object pool
+CANVAS_UPDATE_BATCH_SIZE: int = 50  # Number of entities to update before canvas refresh
+PERFORMANCE_MONITORING: bool = False  # Enable FPS and entity count display
+COLLISION_CHECK_RADIUS: int = 80  # Radius to check for collisions around player
+ENEMY_AVOIDANCE_RADIUS: int = 60  # Radius to check for nearby enemies during movement
 
 # ============================================================================
 # WEAPON & ATTACK CONFIGURATION

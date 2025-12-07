@@ -8,7 +8,7 @@ import random
 from typing import Dict, List, Optional, Any
 from constants import (
     WIDTH, HEIGHT,
-    WEAPON_UPGRADES, LINKED_UPGRADES
+    WEAPON_UPGRADES, LINKED_UPGRADES, GameState
 )
 from audio import stop_background_music, start_background_music, play_beep_async
 
@@ -43,7 +43,7 @@ class MenuManager:
         """Display upgrade selection menu with three random choices."""
         try:
             self.upgrade_menu_active = True
-            self.game.paused = True
+            self.game.set_state(GameState.UPGRADE_MENU)
             
             # Pick three random upgrades
             available_upgrades = list(WEAPON_UPGRADES.keys())
@@ -184,7 +184,7 @@ class MenuManager:
         self.upgrade_menu_active = False
         self.upgrade_menu_clickable = False
         if resume_game:
-            self.game.paused = False
+            self.game.set_state(GameState.PLAYING)
         
         # Delete canvas elements
         for element_id in self.upgrade_menu_elements:
@@ -200,7 +200,7 @@ class MenuManager:
 
     def show_pause_menu(self) -> None:
         """Display pause menu overlay on the game canvas."""
-        self.game.paused = True
+        self.game.set_state(GameState.PAUSED)
         
         # Create overlay - use actual canvas dimensions
         canvas_width = int(self.canvas.winfo_width())
@@ -384,7 +384,7 @@ class MenuManager:
     def hide_pause_menu(self) -> None:
         """Hide the pause menu and resume the game."""
         # Explicitly clear everything
-        self.game.paused = False
+        self.game.set_state(GameState.PLAYING)
         self.pause_menu_id = None
         self.pause_buttons = {}
         
@@ -396,8 +396,10 @@ class MenuManager:
             for element in self.pause_menu_elements:
                 try:
                     self.canvas.delete(element)
-                except:
+                except tk.TclError:
                     pass  # Element may already be deleted
+                except Exception as e:
+                    print(f"[ERROR] Unexpected error deleting pause menu element: {e}")
             self.pause_menu_elements = []
 
     def quit_game(self) -> None:

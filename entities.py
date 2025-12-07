@@ -810,10 +810,23 @@ class Particle:
         self.canvas.coords(self.rect, self.x-2, self.y-2, self.x+2, self.y+2)
         return self.life > 0
 
+    def reset(self, x: float, y: float, vx: float, vy: float, life: int) -> None:
+        """Reset particle for reuse from object pool."""
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.life = life
+        self.max_life = life
+        # Show the particle again (it may be hidden)
+        self.canvas.coords(self.rect, x-2, y-2, x+2, y+2)
+        self.canvas.itemconfig(self.rect, fill='orange', state='normal')
+    
     def cleanup(self) -> None:
-        """Remove particle from canvas."""
+        """Hide particle (don't delete for object pooling)."""
         try:
-            self.canvas.delete(self.rect)
+            # Hide instead of delete for object pooling
+            self.canvas.itemconfig(self.rect, state='hidden')
         except tk.TclError:
             pass  # Canvas item may have already been deleted
 

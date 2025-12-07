@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 # Import from separate modules
 from constants import *
-from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
+from constants import GameState
 from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, HexagonEnemy, BossEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
@@ -20,10 +20,21 @@ class Game:
     Main game class. Handles game state, input, rendering, and logic.
     """
     # Keyboard layout map - layout-independent controls
+    # Maps both keysym names and characters to support cross-platform
     KEYSYM_MAP = {
+        # Arrow keys
         'Up': 'up', 'Down': 'down', 'Left': 'left', 'Right': 'right',
-        'w': 'up', 's': 'down', 'a': 'left', 'd': 'right',
-        'comma': 'up', 'o': 'down', 'e': 'right',  # Dvorak: comma key, o, e
+        # QWERTY WASD
+        'w': 'up', 'W': 'up',
+        's': 'down', 'S': 'down', 
+        'a': 'left', 'A': 'left',
+        'd': 'right', 'D': 'right',
+        # Dvorak ,AOE (physical WASD positions on Dvorak layout)
+        ',': 'up',  # macOS sends character (physical W position)
+        'comma': 'up',  # Windows sends keysym name (physical W position)
+        'o': 'down', 'O': 'down',  # Physical S position on Dvorak
+        # 'a' already mapped for left (same on both layouts)
+        'e': 'right', 'E': 'right',  # Physical D position on Dvorak
     }
     
     def __init__(self, root: tk.Tk) -> None:
@@ -96,11 +107,29 @@ class Game:
 
         self.black_holes = []  # List of active black holes from weapon upgrades
         
+        # Performance optimization: spatial partitioning grid
+        self.spatial_grid = {}  # Dict of (grid_x, grid_y) -> list of enemies
+        self.grid_needs_rebuild = True  # Flag to rebuild grid when enemies move
+        
+        # Performance optimization: object pooling for particles
+        self.particle_pool = []  # Reusable particle objects
+        
+        # Performance monitoring
+        self.frame_count = 0
+        self.fps_timer = 0
+        self.current_fps = 0
+        self.perf_text = None
+        if PERFORMANCE_MONITORING:
+            self.perf_text = self.canvas.create_text(
+                10, 30, anchor='nw', fill='lime', 
+                font=('Courier', 10), text="FPS: 0"
+            )
+        
         # Initialize menu manager
         self.menu_manager = MenuManager(self)
         
-        # Menu state
-        self.main_menu_active = True  # Start with main menu
+        # Game state machine (replaces scattered boolean flags)
+        self._game_state = GameState.MAIN_MENU
         self.game_started = False  # Track if game has been started
         
         # Show main menu instead of starting game directly
@@ -112,13 +141,11 @@ class Game:
         self.root.bind('<FocusOut>', self.on_window_focus_out)
         self.root.bind('<FocusIn>', self.on_window_focus_in)
         self.pressed_keys = set()
-        self.paused = False
         self.ammo_orbs = []  # Track ammo orb canvas items
         self.ammo_rotation = 0  # Angle for orbiting ammo orbs
         self.sound_enabled = True  # Sound effects enabled by default
         self.music_enabled = False  # Background music disabled by default
         self.keyboard_layout = 'dvorak'  # 'dvorak' or 'qwerty'
-        self.game_over_active = False  # Whether game over screen is showing
         self.game_over_restart_btn = None  # Reference to restart button
         self.auto_fire_enabled = False  # Auto-fire toggle
         self.attack_cooldown = 0  # Milliseconds until next attack available (after firing)
@@ -130,6 +157,112 @@ class Game:
         self.root.after(8, self.update)
         self.root.after(20, self.schedule_logic_updates)
         self.interpolation_factor = 0.0  # Track time within logic frame for smooth animation
+
+    # ========================================================================
+    # PERFORMANCE OPTIMIZATION METHODS
+    # ========================================================================
+    
+    def _get_grid_cell(self, x: float, y: float) -> Tuple[int, int]:
+        """Get grid cell coordinates for a position."""
+        from constants import SPATIAL_GRID_CELL_SIZE
+        return (int(x // SPATIAL_GRID_CELL_SIZE), int(y // SPATIAL_GRID_CELL_SIZE))
+    
+    def _rebuild_spatial_grid(self) -> None:
+        """Rebuild spatial partitioning grid for collision detection."""
+        self.spatial_grid.clear()
+        for enemy in self.enemies:
+            ex, ey = enemy.get_position()
+            cell = self._get_grid_cell(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
+            if cell not in self.spatial_grid:
+                self.spatial_grid[cell] = []
+            self.spatial_grid[cell].append(enemy)
+        self.grid_needs_rebuild = False
+    
+    def _get_nearby_enemies(self, x: float, y: float, radius: float) -> List[Any]:
+        """Get enemies near a position using spatial grid (much faster than checking all)."""
+        from constants import SPATIAL_GRID_CELL_SIZE
+        if self.grid_needs_rebuild:
+            self._rebuild_spatial_grid()
+        
+        nearby = []
+        cell = self._get_grid_cell(x, y)
+        
+        # Check this cell and adjacent cells
+        check_range = int(radius // SPATIAL_GRID_CELL_SIZE) + 1
+        for dx in range(-check_range, check_range + 1):
+            for dy in range(-check_range, check_range + 1):
+                check_cell = (cell[0] + dx, cell[1] + dy)
+                if check_cell in self.spatial_grid:
+                    nearby.extend(self.spatial_grid[check_cell])
+        
+        return nearby
+    
+    def _get_particle_from_pool(self) -> Optional[Any]:
+        """Get a particle from the object pool, or None if pool is empty."""
+        if self.particle_pool:
+            return self.particle_pool.pop()
+        return None
+    
+    def _return_particle_to_pool(self, particle: Any) -> None:
+        """Return a particle to the object pool for reuse."""
+        from constants import MAX_POOLED_PARTICLES
+        if len(self.particle_pool) < MAX_POOLED_PARTICLES:
+            # Reset particle state for reuse
+            particle.life = 0
+            self.particle_pool.append(particle)
+
+    # ========================================================================
+    # STATE MACHINE PROPERTIES AND METHODS
+    # ========================================================================
+    
+    @property
+    def game_state(self) -> GameState:
+        """Get current game state."""
+        return self._game_state
+    
+    @property
+    def paused(self) -> bool:
+        """Check if game is paused (for backward compatibility)."""
+        return self._game_state == GameState.PAUSED
+    
+    @property
+    def main_menu_active(self) -> bool:
+        """Check if main menu is active (for backward compatibility)."""
+        return self._game_state == GameState.MAIN_MENU
+    
+    @property
+    def game_over_active(self) -> bool:
+        """Check if game over screen is active (for backward compatibility)."""
+        return self._game_state == GameState.GAME_OVER
+    
+    def set_state(self, new_state: GameState) -> None:
+        """Set game state with validation and side effects.
+        
+        Args:
+            new_state: The new state to transition to
+        """
+        old_state = self._game_state
+        
+        # Validate state transition (you can add more validation here)
+        if old_state == new_state:
+            return  # No change needed
+        
+        print(f"[STATE] Transitioning from {old_state.name} to {new_state.name}")
+        
+        # Apply state change
+        self._game_state = new_state
+        
+        # Handle state-specific side effects
+        if new_state == GameState.PLAYING:
+            # Clear any menu elements
+            if old_state in [GameState.PAUSED, GameState.UPGRADE_MENU, GameState.DEV_MENU]:
+                self.pressed_keys.clear()  # Clear stuck keys
+        elif new_state == GameState.PAUSED:
+            # Ensure game loop is not updating
+            pass
+        elif new_state == GameState.GAME_OVER:
+            # Stop background music on game over
+            stop_background_music()
 
     def _draw_starfield(self):
         """Draw a starfield background with randomly positioned stars."""
@@ -621,13 +754,16 @@ class Game:
             
             # Otherwise, attack
             self.attack()
-        except Exception as e:
-            import sys
-            sys.stdout.write(f"[ERROR] FATAL ERROR IN CLICK HANDLER: {e}\n")
-            sys.stdout.flush()
+        except tk.TclError as e:
+            print(f"[ERROR] Tkinter error in click handler: {e}")
             import traceback
             traceback.print_exc()
-            sys.stdout.flush()
+        except AttributeError as e:
+            print(f"[ERROR] Attribute error in click handler (possibly deleted object): {e}")
+        except Exception as e:
+            print(f"[ERROR] Unexpected error in click handler: {e}")
+            import traceback
+            traceback.print_exc()
 
     def show_upgrade_menu(self):
         """Display upgrade selection menu with three random choices."""
@@ -643,7 +779,7 @@ class Game:
 
     def show_main_menu(self):
         """Display the main menu at game start."""
-        self.main_menu_active = True
+        self.set_state(GameState.MAIN_MENU)
         self.canvas.delete('all')
         self._draw_starfield()
         
@@ -670,56 +806,7 @@ class Game:
         """Start the game after main menu."""
         if not self.game_started:
             self.game_started = True
-            self.main_menu_active = False
-            self.canvas.delete('all')
-            self._draw_starfield()
-            
-            # Recreate player's canvas item (it was deleted by canvas.delete('all'))
-            self.player.rect = self.canvas.create_oval(
-                self.player.x - self.player.size//2, self.player.y - self.player.size//2,
-                self.player.x + self.player.size//2, self.player.y + self.player.size//2,
-                fill='blue'
-            )
-            
-            # Reinitialize game UI
-            self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
-            self.version_text = self.canvas.create_text(10, self.window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
-            self.level_text = self.canvas.create_text(self.window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
-            self.xp_text = self.canvas.create_text(self.window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
-            self.game_level_text = self.canvas.create_text(self.window_width//2, 130, anchor='n', fill='orange', font=('Arial', 16), text=f"Game Level: {self.game_level}")
-            self.timer_text = self.canvas.create_text(self.window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
-            self.start_game_level()
-
-    def show_main_menu(self):
-        """Display the main menu at game start."""
-        self.main_menu_active = True
-        self.canvas.delete('all')
-        self._draw_starfield()
-        
-        # Title
-        self.canvas.create_text(
-            self.window_width // 2, self.window_height // 2 - 100,
-            text='SHAPE GAME',
-            fill='cyan',
-            font=('Arial', 64, 'bold')
-        )
-        
-        # Subtitle
-        self.canvas.create_text(
-            self.window_width // 2, self.window_height // 2 - 20,
-            text='Click to Start or Press SPACE',
-            fill='lime',
-            font=('Arial', 24)
-        )
-        
-        # Store references for click detection
-        self.main_menu_start_rect = None
-
-    def start_game_from_menu(self):
-        """Start the game after main menu."""
-        if not self.game_started:
-            self.game_started = True
-            self.main_menu_active = False
+            self.set_state(GameState.PLAYING)
             self.canvas.delete('all')
             self._draw_starfield()
             
@@ -781,9 +868,8 @@ class Game:
 
     def restart_game(self):
         """Restart the game, resetting player, enemies, and score."""
-        # First, ensure pause/game over states are reset before stopping music
-        self.paused = False
-        self.game_over_active = False
+        # First, ensure game is in playing state
+        self.set_state(GameState.PLAYING)
         
         # Reset menu manager state
         self.menu_manager = MenuManager(self)
@@ -832,12 +918,6 @@ class Game:
                 self.start_game_from_menu()
                 return
             # Otherwise toggle auto-fire
-        if event.keysym == 'space':  # Spacebar
-            # If main menu is active, start the game
-            if self.main_menu_active:
-                self.start_game_from_menu()
-                return
-            # Otherwise toggle auto-fire
             self.auto_fire_enabled = not self.auto_fire_enabled
             print(f"[ACTION] Auto-fire {'ENABLED' if self.auto_fire_enabled else 'DISABLED'}")
             return
@@ -860,15 +940,9 @@ class Game:
             elif self.menu_manager.upgrade_menu_active:
                 self.menu_manager.close_upgrade_menu(resume_game=False)
                 self.show_pause_menu()
-            # If upgrade menu is open, close it without resuming, then open pause menu
-            elif self.menu_manager.upgrade_menu_active:
-                self.menu_manager.close_upgrade_menu(resume_game=False)
-                self.paused = False  # Ensure paused state is reset before opening pause menu
-                self.show_pause_menu()
             # If pause menu is open, close it (resume game)
             elif self.paused:
                 self.hide_pause_menu()
-            # Otherwise, open pause menu
             # Otherwise, open pause menu
             else:
                 self.show_pause_menu()
@@ -877,14 +951,9 @@ class Game:
         # Use layout-independent keysym map for movement controls
         if event.keysym in self.KEYSYM_MAP:
             self.pressed_keys.add(self.KEYSYM_MAP[event.keysym])
-        # Use layout-independent keysym map for movement controls
-        if event.keysym in self.KEYSYM_MAP:
-            self.pressed_keys.add(self.KEYSYM_MAP[event.keysym])
 
     def on_key_release(self, event):
         """Handle key release events for movement."""
-        if event.keysym in self.KEYSYM_MAP:
-            self.pressed_keys.discard(self.KEYSYM_MAP[event.keysym])
         if event.keysym in self.KEYSYM_MAP:
             self.pressed_keys.discard(self.KEYSYM_MAP[event.keysym])
     
@@ -892,8 +961,7 @@ class Game:
 
     def on_window_focus_out(self, event):
         """Pause game when window loses focus."""
-        if not self.paused and not self.game_over_active and not self.main_menu_active:
-        if not self.paused and not self.game_over_active and not self.main_menu_active:
+        if self._game_state == GameState.PLAYING:
             self.show_pause_menu()
 
     def on_window_focus_in(self, event):
@@ -908,7 +976,7 @@ class Game:
 
     def update(self):
         """Main render loop: updates visuals at 120 FPS (~8ms)."""
-        if not self.paused and not self.game_over_active:
+        if self._game_state == GameState.PLAYING:
             # Increment interpolation factor (0.0 to 1.0 over 20ms logic tick)
             self.interpolation_factor = min(1.0, self.interpolation_factor + (8.0 / 20.0))
             # Update player render position with interpolation
@@ -916,16 +984,31 @@ class Game:
             # Update timer display during gameplay
             time_str = self.format_time(self.game_time_ms)
             self.canvas.itemconfig(self.timer_text, text=f"Time: {time_str}")
+            
+            # Performance monitoring
+            if PERFORMANCE_MONITORING and self.perf_text:
+                self.frame_count += 1
+                self.fps_timer += 8
+                if self.fps_timer >= 1000:  # Update FPS display every second
+                    self.current_fps = self.frame_count
+                    self.frame_count = 0
+                    self.fps_timer = 0
+                    entity_count = (len(self.enemies) + len(self.particles) + 
+                                  len(self.projectiles) + len(self.shards) + 
+                                  len(self.minions) + len(self.black_holes))
+                    self.canvas.itemconfig(
+                        self.perf_text, 
+                        text=f"FPS: {self.current_fps}\nEntities: {entity_count}\nGrid Cells: {len(self.spatial_grid)}"
+                    )
+            
             # Force canvas redraw
             self.canvas.update_idletasks()
         self.root.after(8, self.update)
 
     def update_logic(self):
         """Main game logic loop: updates game state at 50 FPS (20ms)."""
-        # Don't run game logic if main menu is active
-        if self.main_menu_active or self.paused:
-        # Don't run game logic if main menu is active
-        if self.main_menu_active or self.paused:
+        # Only run game logic when actively playing
+        if self._game_state != GameState.PLAYING:
             return
         
         try:
@@ -949,11 +1032,17 @@ class Game:
             self.update_shield_cooldown()
             self.update_game_level_progression()  # Update wave and level progression
             self._update_boss_fight()  # Update boss fight mechanics if active
-        except Exception as e:
-            sys.stdout.write(f"[UPDATE ERROR] Uncaught exception in update loop: {e}\n")
+        except tk.TclError as e:
+            print(f"[UPDATE ERROR] Tkinter error in update loop: {e}")
+            # Don't print full traceback for common Tkinter errors
+        except ZeroDivisionError as e:
+            print(f"[UPDATE ERROR] Math error in update loop: {e}")
             import traceback
-            sys.stdout.write(traceback.format_exc())
-            sys.stdout.flush()
+            traceback.print_exc()
+        except Exception as e:
+            print(f"[UPDATE ERROR] Unexpected exception in update loop: {e}")
+            import traceback
+            traceback.print_exc()
 
     def handle_player_movement(self):
         """Check pressed keys and apply acceleration accordingly."""
@@ -983,13 +1072,21 @@ class Game:
         self.player.move(dx, dy, 0, self.window_width, self.window_height)
 
     def create_death_poof(self, x, y):
-        """Create a poof particle effect at (x, y)."""
+        """Create a poof particle effect at (x, y) using object pooling."""
         for i in range(PARTICLE_COUNT):
             angle = (2 * math.pi * i) / PARTICLE_COUNT
             speed = 1.2  # Scaled for 50 FPS logic
             vx = math.cos(angle) * speed
             vy = math.sin(angle) * speed
-            particle = Particle(self.canvas, x, y, vx, vy, PARTICLE_LIFE)
+            
+            # Try to reuse a particle from pool
+            particle = self._get_particle_from_pool()
+            if particle:
+                # Reuse existing particle
+                particle.reset(x, y, vx, vy, PARTICLE_LIFE)
+            else:
+                # Create new particle
+                particle = Particle(self.canvas, x, y, vx, vy, PARTICLE_LIFE)
             self.particles.append(particle)
 
     def create_shrapnel(self, x, y, proj_vx, proj_vy, shrapnel_level):
@@ -1062,13 +1159,14 @@ class Game:
         print(f"[ACTION] Minion summoned (total: {len(self.minions)})")
 
     def update_particles(self):
-        """Update all particles and remove dead ones."""
+        """Update all particles and remove dead ones (with object pooling)."""
         alive = []
         for p in self.particles:
             if p.update():
                 alive.append(p)
             else:
-                p.cleanup()
+                # Return to pool instead of destroying
+                self._return_particle_to_pool(p)
         self.particles = alive
 
     def update_shards(self):
@@ -1222,8 +1320,14 @@ class Game:
                 self.ammo_orbs.append(orb_id)
 
     def move_enemies(self):
-        """Move all enemies towards the player with collision avoidance."""
+        """Move all enemies towards the player with optimized collision avoidance."""
         px, py = self.player.get_center()
+        
+        # Mark grid for rebuild after all movements
+        self.grid_needs_rebuild = True
+        
+        # Batch canvas updates for better performance
+        canvas_updates = []
         
         # Apply collision avoidance and movement
         for enemy in self.enemies:
@@ -1242,15 +1346,20 @@ class Game:
             # Calculate direction to player
             dx = px - ex_center
             dy = py - ey_center
-            dist = math.hypot(dx, dy)
+            dist_sq = dx * dx + dy * dy  # Use squared distance to avoid sqrt
             
-            if dist > 0:
+            if dist_sq > 1:  # Avoid division by zero
+                dist = math.sqrt(dist_sq)
                 # Base movement toward player
                 move_x = (dx / dist) * speed
                 move_y = (dy / dist) * speed
                 
+                # OPTIMIZED: Only check nearby enemies using spatial grid
+                # This reduces O(n²) to approximately O(n*k) where k is much smaller
+                nearby_enemies = self._get_nearby_enemies(ex_center, ey_center, 60)
+                
                 # Collision avoidance: steer away from nearby enemies
-                for other in self.enemies:
+                for other in nearby_enemies:
                     if other is enemy:
                         continue
                     
@@ -1261,13 +1370,14 @@ class Game:
                     # Vector from other enemy to this enemy
                     diff_x = ex_center - ox_center
                     diff_y = ey_center - oy_center
-                    enemy_dist = math.hypot(diff_x, diff_y)
+                    enemy_dist_sq = diff_x * diff_x + diff_y * diff_y
                     
                     # Avoidance radius: push enemies apart if too close
-                    min_distance = 40  # Avoid radius
-                    if enemy_dist < min_distance and enemy_dist > 0:
+                    min_distance_sq = 1600  # 40^2 - avoid sqrt
+                    if enemy_dist_sq < min_distance_sq and enemy_dist_sq > 1:
+                        enemy_dist = math.sqrt(enemy_dist_sq)
                         # Steer away proportionally to closeness
-                        steer_strength = 0.6 * (min_distance - enemy_dist) / min_distance
+                        steer_strength = 0.6 * (40 - enemy_dist) / 40
                         avoidance_x = (diff_x / enemy_dist) * steer_strength
                         avoidance_y = (diff_y / enemy_dist) * steer_strength
                         move_x += avoidance_x
@@ -1277,21 +1387,32 @@ class Game:
                 enemy.x += int(move_x)
                 enemy.y += int(move_y)
                 
-                # Update display
+                # Prepare canvas update (batch for performance)
                 if isinstance(enemy, TriangleEnemy):
                     enemy.points = [
                         enemy.x + enemy.size//2, enemy.y,
                         enemy.x, enemy.y + enemy.size,
                         enemy.x + enemy.size, enemy.y + enemy.size
                     ]
-                    enemy.canvas.coords(enemy.rect, *enemy.points)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 else:
-                    enemy.canvas.coords(enemy.rect, enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)
+                    canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
+        
+        # Batch apply all canvas updates
+        for rect_id, shape_type, coords in canvas_updates:
+            if shape_type == 'polygon':
+                self.canvas.coords(rect_id, *coords)
+            else:
+                self.canvas.coords(rect_id, *coords)
 
     def check_player_collision(self) -> None:
         """Check if any enemy collides with player and deal damage."""
         px, py = self.player.get_center()
-        for enemy in self.enemies:
+        
+        # OPTIMIZED: Only check enemies near player using spatial grid
+        nearby_enemies = self._get_nearby_enemies(px, py, 80)
+        
+        for enemy in nearby_enemies:
             ex, ey = enemy.get_position()
             
             # Decrease immunity timer if enemy has it
@@ -1325,8 +1446,7 @@ class Game:
 
     def game_over(self):
         """Handle game over - show game over screen."""
-        self.paused = True
-        self.game_over_active = True  # Flag to indicate game over screen is active
+        self.set_state(GameState.GAME_OVER)
         
         # Calculate overlay size based on actual content
         # Title + Score + Time + Button with padding: 60 + 40 + 40 + 50 + 60 = 250 pixels high

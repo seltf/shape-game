@@ -10,13 +10,24 @@ import time
 from typing import Dict, Optional
 from constants import SOUND_COOLDOWN_MS
 
-# Try to import winsound (only available on Windows)
+# Try to import pygame for cross-platform audio support
 try:
-    import winsound
+    import pygame
+    pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+    AUDIO_BACKEND: str = 'pygame'
     AUDIO_AVAILABLE: bool = True
+    print("[AUDIO] Using pygame.mixer for audio playback")
 except ImportError:
-    AUDIO_AVAILABLE: bool = False
-    print("[AUDIO] winsound not available - audio features will be disabled")
+    # Fallback to winsound on Windows only
+    try:
+        import winsound
+        AUDIO_BACKEND: str = 'winsound'
+        AUDIO_AVAILABLE: bool = True
+        print("[AUDIO] Using winsound for audio playback (Windows only)")
+    except ImportError:
+        AUDIO_BACKEND: str = None
+        AUDIO_AVAILABLE: bool = False
+        print("[AUDIO] No audio backend available - audio features will be disabled")
 
 
 # Determine the base directory for resources (handles both dev and bundled exe)
@@ -48,6 +59,43 @@ class AudioManager:
         self.sound_enabled: bool = True  # Sound effects enabled by default
         self.music_enabled: bool = False  # Background music disabled by default
     
+    def _generate_beep_pygame(self, frequency: int, duration_ms: int) -> None:
+        """Generate a simple beep tone using pygame.sndarray."""
+        if AUDIO_BACKEND != 'pygame':
+            return
+        
+        try:
+            import numpy as np
+            sample_rate = 22050
+            duration_sec = duration_ms / 1000.0
+            num_samples = int(sample_rate * duration_sec)
+            
+            # Generate sine wave
+            t = np.linspace(0, duration_sec, num_samples, False)
+            wave = np.sin(frequency * 2 * np.pi * t)
+            
+            # Apply envelope to avoid clicks
+            envelope = np.ones_like(wave)
+            fade_samples = min(100, num_samples // 10)
+            envelope[:fade_samples] = np.linspace(0, 1, fade_samples)
+            envelope[-fade_samples:] = np.linspace(1, 0, fade_samples)
+            wave = wave * envelope
+            
+            # Convert to 16-bit PCM
+            wave = (wave * 32767).astype(np.int16)
+            
+            # Create stereo sound (duplicate mono to both channels)
+            stereo_wave = np.column_stack((wave, wave))
+            
+            # Create and play sound
+            sound = pygame.sndarray.make_sound(stereo_wave)
+            sound.play()
+        except ImportError:
+            # If numpy not available, skip beep generation
+            print("[AUDIO] numpy not available for beep generation")
+        except Exception as e:
+            print(f"[AUDIO] Failed to generate beep: {e}")
+    
     def play_sound_async(self, sound_name: str, frequency: Optional[int] = None, 
                         duration: Optional[int] = None) -> None:
         """
@@ -73,14 +121,20 @@ class AudioManager:
         print(f"[SOUND] Playing sound effect: {sound_name} (freq={frequency}, dur={duration}ms)")
         
         def play():
-            # Try to load custom sound file using winsound
+            # Try to load custom sound file
             if AUDIO_AVAILABLE and sound_name in SOUND_EFFECTS:
                 sound_path = SOUND_EFFECTS[sound_name]
                 if os.path.exists(sound_path):
                     try:
                         print(f"  -> Playing file: {sound_path}")
-                        winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
-                        return  # Successfully played file, don't play fallback
+                        if AUDIO_BACKEND == 'pygame':
+                            sound = pygame.mixer.Sound(sound_path)
+                            sound.play()
+                            return
+                        elif AUDIO_BACKEND == 'winsound':
+                            import winsound
+                            winsound.PlaySound(sound_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                            return
                     except Exception as e:
                         print(f"  -> Failed to play file {sound_path}: {e}")
                         # Fall through to beep fallback
@@ -89,7 +143,12 @@ class AudioManager:
             if AUDIO_AVAILABLE and frequency is not None and duration is not None:
                 try:
                     print(f"  -> Playing beep fallback: {frequency}Hz for {duration}ms")
-                    winsound.Beep(frequency, duration)
+                    if AUDIO_BACKEND == 'pygame':
+                        # Generate a simple beep tone using pygame
+                        self._generate_beep_pygame(frequency, duration)
+                    elif AUDIO_BACKEND == 'winsound':
+                        import winsound
+                        winsound.Beep(frequency, duration)
                 except Exception as e:
                     print(f"  -> Failed to play beep: {e}")
         
@@ -121,7 +180,11 @@ class AudioManager:
         
         def beep():
             try:
-                winsound.Beep(frequency, duration)
+                if AUDIO_BACKEND == 'pygame':
+                    self._generate_beep_pygame(frequency, duration)
+                elif AUDIO_BACKEND == 'winsound':
+                    import winsound
+                    winsound.Beep(frequency, duration)
             except Exception as e:
                 print(f"[SOUND] Failed to play beep: {e}")
         
@@ -145,10 +208,17 @@ class AudioManager:
         
         def loop_music():
             try:
-                while not self._music_stop_event.is_set():
-                    winsound.PlaySound(BACKGROUND_MUSIC, winsound.SND_FILENAME)
-                    # Check stop event periodically
-                    self._music_stop_event.wait(timeout=0.1)
+                if AUDIO_BACKEND == 'pygame':
+                    pygame.mixer.music.load(BACKGROUND_MUSIC)
+                    pygame.mixer.music.play(-1)  # Loop indefinitely
+                    # Wait for stop event
+                    self._music_stop_event.wait()
+                    pygame.mixer.music.stop()
+                elif AUDIO_BACKEND == 'winsound':
+                    import winsound
+                    while not self._music_stop_event.is_set():
+                        winsound.PlaySound(BACKGROUND_MUSIC, winsound.SND_FILENAME)
+                        self._music_stop_event.wait(timeout=0.1)
             except Exception as e:
                 print(f"Failed to play background music: {e}")
         
@@ -195,7 +265,11 @@ class AudioManager:
         
         def beep():
             try:
-                winsound.Beep(frequency, duration)
+                if AUDIO_BACKEND == 'pygame':
+                    self._generate_beep_pygame(frequency, duration)
+                elif AUDIO_BACKEND == 'winsound':
+                    import winsound
+                    winsound.Beep(frequency, duration)
             except Exception as e:
                 print(f"[SOUND] Failed to play beep: {e}")
         
