@@ -482,6 +482,13 @@ class TriangleEnemy:
             self.x += self.pop_velocity_x
             self.y += self.pop_velocity_y
             self.pop_distance += math.hypot(self.pop_velocity_x, self.pop_velocity_y)
+        # Apply push force if being pushed by shield
+        elif self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
@@ -540,22 +547,29 @@ class PentagonEnemy:
         self.shield_immunity: int = 0  # Frames of immunity after shield hit
         # Draw pentagon using create_polygon
         self.points: List[float] = self._calculate_pentagon_points(x, y, size)
-        self.rect: int = self.canvas.create_polygon(*self.points, fill='purple')
+        self.rect: int = self.canvas.create_polygon(*self.points, fill='purple', outline='#FF00FF', width=2)
     
     def _calculate_pentagon_points(self, x: float, y: float, size: int) -> List[float]:
         """Calculate the 5 points of a regular pentagon."""
         points: List[float] = []
         for i in range(5):
             angle = (2 * math.pi * i / 5) - (math.pi / 2)  # Start from top
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -617,15 +631,22 @@ class HexagonEnemy:
         points: List[float] = []
         for i in range(6):
             angle = (2 * math.pi * i / 6)  # Start from right, 60 degrees apart
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -691,15 +712,22 @@ class BossEnemy:
         points: List[float] = []
         for i in range(8):
             angle = (2 * math.pi * i / 8) - (math.pi / 8)  # Rotated 22.5 degrees
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 3) -> None:
         """Move boss towards (target_x, target_y) by 'speed' pixels. Boss moves slower."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1

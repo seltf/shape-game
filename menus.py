@@ -5,7 +5,7 @@ Extracts menu logic from the Game class for better organization and reusability.
 
 import tkinter as tk
 import random
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from constants import (
     WIDTH, HEIGHT,
     WEAPON_UPGRADES, LINKED_UPGRADES
@@ -175,11 +175,16 @@ class MenuManager:
             self.upgrade_menu_active = False
             self.game.paused = False
 
-    def close_upgrade_menu(self) -> None:
-        """Close the upgrade menu."""
+    def close_upgrade_menu(self, resume_game: bool = True) -> None:
+        """Close the upgrade menu.
+        
+        Args:
+            resume_game: If True, resume the game. If False, keep paused state.
+        """
         self.upgrade_menu_active = False
         self.upgrade_menu_clickable = False
-        self.game.paused = False
+        if resume_game:
+            self.game.paused = False
         
         # Delete canvas elements
         for element_id in self.upgrade_menu_elements:
@@ -200,9 +205,20 @@ class MenuManager:
         # Create overlay - use actual canvas dimensions
         canvas_width = int(self.canvas.winfo_width())
         canvas_height = int(self.canvas.winfo_height())
-        menu_width = int(canvas_width * 0.15)  # 15% of canvas width
-        # Height: title (30) + upgrades label (20) + upgrades text (20) + 6 buttons (40 each) + spacing (60*5) + padding (40) = 510
-        menu_height = 510
+        menu_width = 320  # Fixed width in pixels
+        
+        # Calculate menu height dynamically based on content
+        title_height = 50  # Title with padding
+        upgrades_section_height = 50  # Label + text display
+        button_height = 40
+        button_spacing = 10
+        num_buttons = 6  # Resume, Restart, Quit, Sound, Music, Dev (hidden)
+        padding = 20
+        
+        menu_height = (title_height + upgrades_section_height + 
+                      (num_buttons * button_height) + ((num_buttons - 1) * button_spacing) + 
+                      padding)
+        
         overlay_x = (canvas_width - menu_width) // 2
         overlay_y = (canvas_height - menu_height) // 2
         overlay_width = menu_width
@@ -264,87 +280,91 @@ class MenuManager:
         )
         self.pause_menu_elements.append(upgrades_display)
         
+        # Calculate button positions based on dynamic height
+        button_y = overlay_y + title_height + upgrades_section_height + 10  # 10 for top padding of buttons
+        button_width = overlay_width - 80  # 40px margin on each side
+        
         # Resume button
-        resume_btn_y = overlay_y + 130
         self.pause_buttons['resume'] = self.canvas.create_rectangle(
-            overlay_x + 40, resume_btn_y,
-            overlay_x + overlay_width - 40, resume_btn_y + 40,
+            overlay_x + 40, button_y,
+            overlay_x + overlay_width - 40, button_y + button_height,
             fill='green', outline='white', width=2
         )
         resume_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, resume_btn_y + 20,
+            overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Resume',
             fill='white',
             font=('Arial', 16)
         )
         self.pause_menu_elements.append(self.pause_buttons['resume'])
         self.pause_menu_elements.append(resume_text)
+        button_y += button_height + button_spacing
         
         # Restart button
-        restart_btn_y = resume_btn_y + 60
         self.pause_buttons['restart'] = self.canvas.create_rectangle(
-            overlay_x + 40, restart_btn_y,
-            overlay_x + overlay_width - 40, restart_btn_y + 40,
+            overlay_x + 40, button_y,
+            overlay_x + overlay_width - 40, button_y + button_height,
             fill='orange', outline='white', width=2
         )
         restart_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, restart_btn_y + 20,
+            overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Restart',
             fill='white',
             font=('Arial', 16)
         )
         self.pause_menu_elements.append(self.pause_buttons['restart'])
         self.pause_menu_elements.append(restart_text)
+        button_y += button_height + button_spacing
         
         # Quit button
-        quit_btn_y = restart_btn_y + 60
         self.pause_buttons['quit'] = self.canvas.create_rectangle(
-            overlay_x + 40, quit_btn_y,
-            overlay_x + overlay_width - 40, quit_btn_y + 40,
+            overlay_x + 40, button_y,
+            overlay_x + overlay_width - 40, button_y + button_height,
             fill='red', outline='white', width=2
         )
         quit_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, quit_btn_y + 20,
+            overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Quit',
             fill='white',
             font=('Arial', 16)
         )
         self.pause_menu_elements.append(self.pause_buttons['quit'])
         self.pause_menu_elements.append(quit_text)
+        button_y += button_height + button_spacing
         
         # Sound toggle button
-        sound_btn_y = quit_btn_y + 60
         sound_status = 'ON' if self.game.sound_enabled else 'OFF'
         self.pause_buttons['sound'] = self.canvas.create_rectangle(
-            overlay_x + 40, sound_btn_y,
-            overlay_x + overlay_width - 40, sound_btn_y + 40,
+            overlay_x + 40, button_y,
+            overlay_x + overlay_width - 40, button_y + button_height,
             fill='#4a4a7a', outline='white', width=2
         )
         sound_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, sound_btn_y + 20,
+            overlay_x + overlay_width // 2, button_y + button_height // 2,
             text=f'Sound: {sound_status}',
             fill='white',
             font=('Arial', 16)
         )
         self.pause_menu_elements.append(self.pause_buttons['sound'])
         self.pause_menu_elements.append(sound_text)
+        button_y += button_height + button_spacing
         
         # Music toggle button
-        music_btn_y = sound_btn_y + 60
         music_status = 'ON' if self.game.music_enabled else 'OFF'
         self.pause_buttons['music'] = self.canvas.create_rectangle(
-            overlay_x + 40, music_btn_y,
-            overlay_x + overlay_width - 40, music_btn_y + 40,
+            overlay_x + 40, button_y,
+            overlay_x + overlay_width - 40, button_y + button_height,
             fill='#7a4a4a', outline='white', width=2
         )
         music_text = self.canvas.create_text(
-            overlay_x + overlay_width // 2, music_btn_y + 20,
+            overlay_x + overlay_width // 2, button_y + button_height // 2,
             text=f'Music: {music_status}',
             fill='white',
             font=('Arial', 16)
         )
         self.pause_menu_elements.append(self.pause_buttons['music'])
         self.pause_menu_elements.append(music_text)
+        button_y += button_height + button_spacing
         
         # Hidden dev button (tiny, in corner)
         self.pause_buttons['dev'] = self.canvas.create_rectangle(
@@ -363,10 +383,8 @@ class MenuManager:
 
     def hide_pause_menu(self) -> None:
         """Hide the pause menu and resume the game."""
-        print("[DEBUG] menu_manager.hide_pause_menu() called")
         # Explicitly clear everything
         self.game.paused = False
-        print(f"[DEBUG] Set game.paused = False, now: {self.game.paused}")
         self.pause_menu_id = None
         self.pause_buttons = {}
         
@@ -381,7 +399,6 @@ class MenuManager:
                 except:
                     pass  # Element may already be deleted
             self.pause_menu_elements = []
-        print("[DEBUG] Pause menu hidden successfully")
 
     def quit_game(self) -> None:
         """Close the game window and exit."""
