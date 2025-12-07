@@ -482,6 +482,13 @@ class TriangleEnemy:
             self.x += self.pop_velocity_x
             self.y += self.pop_velocity_y
             self.pop_distance += math.hypot(self.pop_velocity_x, self.pop_velocity_y)
+        # Apply push force if being pushed by shield
+        elif self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
@@ -554,8 +561,15 @@ class PentagonEnemy:
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -624,8 +638,15 @@ class HexagonEnemy:
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
         """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
@@ -698,8 +719,15 @@ class BossEnemy:
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 3) -> None:
         """Move boss towards (target_x, target_y) by 'speed' pixels. Boss moves slower."""
+        # Apply push force if being pushed by shield
+        if self.being_pushed and self.push_timer > 0:
+            self.x += int(self.push_velocity_x)
+            self.y += int(self.push_velocity_y)
+            self.push_timer -= 1
+            if self.push_timer <= 0:
+                self.being_pushed = False
         # Apply pull force if being pulled by black hole
-        if self.being_pulled and self.pull_timer > 0:
+        elif self.being_pulled and self.pull_timer > 0:
             self.x += int(self.pull_velocity_x)
             self.y += int(self.pull_velocity_y)
             self.pull_timer -= 1
