@@ -631,8 +631,8 @@ class HexagonEnemy:
         points: List[float] = []
         for i in range(6):
             angle = (2 * math.pi * i / 6)  # Start from right, 60 degrees apart
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
@@ -712,8 +712,8 @@ class BossEnemy:
         points: List[float] = []
         for i in range(8):
             angle = (2 * math.pi * i / 8) - (math.pi / 8)  # Rotated 22.5 degrees
-            px = x + size//2 + int((size//2) * math.cos(angle))
-            py = y + size//2 + int((size//2) * math.sin(angle))
+            px = x + int((size//2) * math.cos(angle))
+            py = y + int((size//2) * math.sin(angle))
             points.extend([px, py])
         return points
     
