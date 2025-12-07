@@ -3,7 +3,6 @@ Audio management system for Top Down Game
 Handles sound effects, beeps, and background music playback
 """
 
-import winsound
 import threading
 import os
 import sys
@@ -11,15 +10,20 @@ import time
 from typing import Dict, Optional
 from constants import SOUND_COOLDOWN_MS
 
+# Try to import winsound (only available on Windows)
+try:
+    import winsound
+    AUDIO_AVAILABLE: bool = True
+except ImportError:
+    AUDIO_AVAILABLE: bool = False
+    print("[AUDIO] winsound not available - audio features will be disabled")
+
 
 # Determine the base directory for resources (handles both dev and bundled exe)
 if getattr(sys, 'frozen', False):
     BASE_DIR: str = sys._MEIPASS
 else:
     BASE_DIR: str = os.path.dirname(os.path.abspath(__file__))
-
-# Audio is available on Windows with winsound
-AUDIO_AVAILABLE: bool = True
 
 # Sound effects dictionary - maps sound names to file paths
 SOUND_EFFECTS: Dict[str, str] = {
@@ -70,7 +74,7 @@ class AudioManager:
         
         def play():
             # Try to load custom sound file using winsound
-            if sound_name in SOUND_EFFECTS and AUDIO_AVAILABLE:
+            if AUDIO_AVAILABLE and sound_name in SOUND_EFFECTS:
                 sound_path = SOUND_EFFECTS[sound_name]
                 if os.path.exists(sound_path):
                     try:
@@ -82,7 +86,7 @@ class AudioManager:
                         # Fall through to beep fallback
             
             # Fallback to beep if custom sound unavailable or couldn't be loaded
-            if frequency is not None and duration is not None:
+            if AUDIO_AVAILABLE and frequency is not None and duration is not None:
                 try:
                     print(f"  -> Playing beep fallback: {frequency}Hz for {duration}ms")
                     winsound.Beep(frequency, duration)
@@ -100,7 +104,7 @@ class AudioManager:
             frequency: Frequency in Hz
             duration: Duration in milliseconds
         """
-        if not self.sound_enabled:
+        if not self.sound_enabled or not AUDIO_AVAILABLE:
             return
         
         # Throttle beeps by frequency to prevent overlapping
@@ -127,13 +131,13 @@ class AudioManager:
     def start_background_music(self) -> None:
         """Start looping background music."""
         # Check if sound and music are enabled
-        if not self.sound_enabled or not self.music_enabled:
+        if not self.sound_enabled or not self.music_enabled or not AUDIO_AVAILABLE:
             return
         
         # Stop any existing music
         self.stop_background_music()
         
-        if not AUDIO_AVAILABLE or not os.path.exists(BACKGROUND_MUSIC):
+        if not os.path.exists(BACKGROUND_MUSIC):
             return
         
         # Create stop event for this music session
@@ -184,7 +188,7 @@ class AudioManager:
             frequency: Frequency in Hz
             duration: Duration in milliseconds
         """
-        if not self.sound_enabled:
+        if not self.sound_enabled or not AUDIO_AVAILABLE:
             return
         
         print(f"[SOUND] Playing unthrottled beep: {frequency}Hz for {duration}ms")
