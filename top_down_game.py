@@ -209,7 +209,11 @@ class Game:
         if len(self.particle_pool) < MAX_POOLED_PARTICLES:
             # Reset particle state for reuse
             particle.life = 0
+            particle.cleanup()  # Hide the particle immediately
             self.particle_pool.append(particle)
+        else:
+            # Pool is full, hide the particle anyway
+            particle.cleanup()
 
     # ========================================================================
     # STATE MACHINE PROPERTIES AND METHODS
@@ -1331,6 +1335,49 @@ class Game:
         
         # Apply collision avoidance and movement
         for enemy in self.enemies:
+            # Check if enemy is being pushed by shield or pulled by black hole
+            if (hasattr(enemy, 'being_pushed') and enemy.being_pushed and enemy.push_timer > 0):
+                # Apply push movement
+                enemy.x += int(enemy.push_velocity_x)
+                enemy.y += int(enemy.push_velocity_y)
+                enemy.push_timer -= 1
+                if enemy.push_timer <= 0:
+                    enemy.being_pushed = False
+                
+                # Update canvas position for pushed enemy
+                if isinstance(enemy, TriangleEnemy):
+                    enemy.points = [
+                        enemy.x + enemy.size//2, enemy.y,
+                        enemy.x, enemy.y + enemy.size,
+                        enemy.x + enemy.size, enemy.y + enemy.size
+                    ]
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                else:
+                    canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
+                continue  # Skip normal movement logic
+            
+            # Check if enemy is being pulled by black hole
+            if (hasattr(enemy, 'being_pulled') and enemy.being_pulled and enemy.pull_timer > 0):
+                # Apply pull movement
+                enemy.x += int(enemy.pull_velocity_x)
+                enemy.y += int(enemy.pull_velocity_y)
+                enemy.pull_timer -= 1
+                if enemy.pull_timer <= 0:
+                    enemy.being_pulled = False
+                
+                # Update canvas position for pulled enemy
+                if isinstance(enemy, TriangleEnemy):
+                    enemy.points = [
+                        enemy.x + enemy.size//2, enemy.y,
+                        enemy.x, enemy.y + enemy.size,
+                        enemy.x + enemy.size, enemy.y + enemy.size
+                    ]
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                else:
+                    canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
+                continue  # Skip normal movement logic
+            
+            # Normal movement logic
             # Different speeds for different enemy types
             if isinstance(enemy, PentagonEnemy):
                 speed = 1.5  # Pentagons move slower
@@ -1431,10 +1478,9 @@ class Game:
             # Collision detected - handle it
             if self.player.shield_active and self.player.shield_rings:
                 # Shield blocks the damage (only if there are rings)
-                print(f"[ACTION] Shield blocked enemy hit! Rings remaining: {len(self.player.shield_rings)}")
                 play_beep_async(1200, 50, self)  # Blip sound on shield hit
                 self.player.deactivate_shield(enemy=enemy)
-                enemy.shield_immunity = 10  # Prevent re-collision for 10 frames
+                enemy.shield_immunity = 25  # Prevent re-collision for 25 frames (~0.5 seconds)
             else:
                 # No shield - deal damage to player
                 print(f"[ACTION] Enemy hit player! Health: {self.player.health} -> {self.player.health - 1}")

@@ -325,6 +325,7 @@ class Player:
 
     def deactivate_shield(self, enemy: Optional[Any] = None) -> None:
         """Remove one shield ring and push back nearby enemies. Start cooldown if all rings destroyed."""
+        print(f"[SHIELD] deactivate_shield called, has game: {hasattr(self, 'game')}")
         try:
             # Remove one ring from the display
             if self.shield_rings:
@@ -338,7 +339,7 @@ class Player:
                 self.shield_cooldown = 5000  # 5 seconds in milliseconds
             
             # Push back all nearby enemies in a radius
-            push_radius = 150  # Radius to affect enemies
+            push_radius = 100  # Radius to affect enemies (reduced from 150)
             px, py = self.get_center()
             
             # Find the game instance to access all enemies
@@ -359,11 +360,11 @@ class Player:
                         
                         # If enemy is within push radius, push it back
                         if dist < push_radius and dist > 0:
-                            push_force = 2.5  # Pushback speed per frame
+                            push_force = 3.0  # Pushback speed per frame (gentle knockback to create space)
                             nearby_enemy.being_pushed = True
                             nearby_enemy.push_velocity_x = (dx / dist) * push_force
                             nearby_enemy.push_velocity_y = (dy / dist) * push_force
-                            nearby_enemy.push_timer = 16  # Push for 16 frames (~0.8 seconds)
+                            nearby_enemy.push_timer = 15  # Push for 15 frames (~0.3 seconds at 50 FPS)
                     except Exception as e:
                         print(f"[ERROR] Failed to push enemy: {e}")
         except Exception as e:
@@ -874,25 +875,18 @@ class Shard:
             
             if dist_sq < COLLISION_DISTANCE_SQ:
                 # Hit enemy!
-                self.game.create_death_poof(ex_center, ey_center)
+                enemy_dies = False  # Assume enemy survives by default
                 
-                # Check if it's a tank or triangle enemy (they take damage)
-                is_pentagon = isinstance(enemy, PentagonEnemy)
-                is_triangle = isinstance(enemy, TriangleEnemy)
-                enemy_dies = True
-                
-                if is_pentagon or is_triangle:
-                    # Tank/triangle enemy takes damage but might survive
-                    if enemy.take_damage():
-                        # Still alive after damage
-                        enemy_dies = False
-                    else:
-                        # Enemy is now dead
+                # All enemies can now take damage
+                if hasattr(enemy, 'take_damage'):
+                    if not enemy.take_damage():
+                        # Enemy is now dead (take_damage returns False when health <= 0)
                         enemy_dies = True
                 
                 if enemy_dies:
-                    # Remove enemy and award XP
+                    # Create poof effect only when enemy dies
                     self.game.create_death_poof(ex_center, ey_center)
+                    # Remove enemy and award XP
                     self.game.kill_enemy(enemy)
                 # If explosive shrapnel, create explosion effect with more shards
                 if self.explosive:
@@ -1029,9 +1023,6 @@ class Projectile:
             ex_center = ex + ENEMY_SIZE_HALF
             ey_center = ey + ENEMY_SIZE_HALF
             
-            # Create poof effect
-            self.game.create_death_poof(ex_center, ey_center)
-            
             # All enemies can now take damage (sides = health)
             # Triangle (3 sides) = 3 health, Square (4 sides) = 4 health, Pentagon (5 sides) = 5 health
             enemy_dies = False  # Assume enemy survives by default
@@ -1043,6 +1034,8 @@ class Projectile:
                     enemy_dies = True
             
             if enemy_dies:
+                # Create poof effect only when enemy dies
+                self.game.create_death_poof(ex_center, ey_center)
                 # Create shrapnel if upgrade is active (on every hit, not just final kill)
                 if self.shrapnel_level > 0:
                     self.game.create_shrapnel(ex_center, ey_center, self.vx, self.vy, self.shrapnel_level)
@@ -1280,24 +1273,17 @@ class Projectile:
         tx_center = tx + ENEMY_SIZE_HALF
         ty_center = ty + ENEMY_SIZE_HALF
         
-        # Create poof effect at the target
-        self.game.create_death_poof(tx_center, ty_center)
+        # All enemies can now take damage
+        enemy_dies = False  # Assume enemy survives by default
         
-        # Check if it's a tank or triangle enemy
-        is_pentagon = isinstance(target_enemy, PentagonEnemy)
-        is_triangle = isinstance(target_enemy, TriangleEnemy)
-        enemy_dies = True
-        
-        if is_pentagon or is_triangle:
-            # Tank/triangle enemy takes damage but might survive
-            if target_enemy.take_damage():
-                # Still alive after damage
-                enemy_dies = False
-            else:
-                # Enemy is now dead
+        if hasattr(target_enemy, 'take_damage'):
+            if not target_enemy.take_damage():
+                # Enemy is now dead (take_damage returns False when health <= 0)
                 enemy_dies = True
         
         if enemy_dies:
+            # Create poof effect only when enemy dies
+            self.game.create_death_poof(tx_center, ty_center)
             # Create shrapnel if upgrade is active (only on final kill)
             if self.shrapnel_level > 0:
                 self.game.create_shrapnel(tx_center, ty_center, self.vx, self.vy, self.shrapnel_level)
@@ -1793,25 +1779,18 @@ class MinionProjectile:
             
             if dist_sq < (self.collision_radius + ENEMY_SIZE_HALF) ** 2:
                 # Collision! Deal damage to enemy
-                self.game.create_death_poof(ex_center, ey_center)
+                enemy_dies = False  # Assume enemy survives by default
                 
-                # Check enemy type for damage handling
-                is_pentagon = isinstance(enemy, PentagonEnemy)
-                is_triangle = isinstance(enemy, TriangleEnemy)
-                enemy_dies = True
-                
-                if is_pentagon or is_triangle:
-                    # Tank/triangle enemy takes damage
-                    if enemy.take_damage():
-                        # Still alive after damage
-                        enemy_dies = False
-                    else:
-                        # Enemy is now dead
+                # All enemies can now take damage
+                if hasattr(enemy, 'take_damage'):
+                    if not enemy.take_damage():
+                        # Enemy is now dead (take_damage returns False when health <= 0)
                         enemy_dies = True
                 
                 if enemy_dies:
-                    # Remove enemy and award XP
+                    # Create poof effect only when enemy dies
                     self.game.create_death_poof(ex_center, ey_center)
+                    # Remove enemy and award XP
                     self.game.kill_enemy(enemy)
                 
                 # Projectile despawns after hit
