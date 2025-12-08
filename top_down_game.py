@@ -12,7 +12,11 @@ from constants import GameState
 from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, HexagonEnemy, BossEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
+from systems.input import InputSystem
+from systems.progression import ProgressionSystem
+from systems.weapon import WeaponSystem
 from collision import CollisionDetector, PlayerCollisionHandler
+from ui.hud import HUD
 
 
 class Game:
@@ -37,30 +41,37 @@ class Game:
         'e': 'right', 'E': 'right',  # Physical D position on Dvorak
     }
     
-    def __init__(self, root: tk.Tk) -> None:
-        """Initialize the game window, player, enemies, and event bindings."""
-        self.root: tk.Tk = root
+    def __init__(self, root: Optional[tk.Tk] = None, canvas: Optional[tk.Canvas] = None) -> None:
+        """Initialize the game window, player, enemies, and event bindings.
+        Allows injecting a mock canvas for headless tests.
+        """
+        # Create root if not provided (normal runtime)
+        self.root: tk.Tk = root if root is not None else tk.Tk()
         
-        self.canvas: tk.Canvas = tk.Canvas(root, width=WIDTH, height=HEIGHT, bg='black')
-        self.canvas.pack()
+        # Use provided canvas (tests) or create one
+        if canvas is not None:
+            self.canvas = canvas
+        else:
+            self.canvas = tk.Canvas(self.root, width=WIDTH, height=HEIGHT, bg='black')
+            self.canvas.pack()
         
         # Get the actual canvas dimensions (after packing)
-        root.update()
-        self.window_width: int = self.canvas.winfo_width()
-        self.window_height: int = self.canvas.winfo_height()
+        self.root.update()
+        self.window_width: int = int(self.canvas.winfo_width())
+        self.window_height: int = int(self.canvas.winfo_height())
         
         # If canvas dimensions are not set yet, use root window dimensions
         if self.window_width <= 1:
-            self.window_width = root.winfo_width()
+            self.window_width = self.root.winfo_width()
         if self.window_height <= 1:
-            self.window_height = root.winfo_height()
+            self.window_height = self.root.winfo_height()
         
         # Draw starfield background
         self._draw_starfield()
         
         self.score = 0
-        self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
-        self.version_text = self.canvas.create_text(10, self.window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
+        self.hud = HUD(self.canvas, self.window_width, self.window_height, VERSION)
+        self.hud.set_score(self.score)
         self.player = Player(self.canvas, self.window_width//2, self.window_height//2, PLAYER_SIZE)
         self.player.game = self  # Give player reference to game instance for shield pushback
         
@@ -82,12 +93,12 @@ class Game:
         self.xp = 0  # Current XP
         self.level = 0  # Current player level (for upgrades)
         self.xp_for_next_level = 10  # XP needed for next level
-        self.level_text = self.canvas.create_text(self.window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
-        self.xp_text = self.canvas.create_text(self.window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
+        self.hud.set_player_level(self.level)
+        self.hud.set_xp(self.xp, self.xp_for_next_level)
 
         # Game level progression (separate from player level - for enemy difficulty)
         self.game_level = 1  # Current game level (wave progression)
-        self.game_level_text = self.canvas.create_text(self.window_width//2, 130, anchor='n', fill='orange', font=('Arial', 16), text=f"Game Level: {self.game_level}")
+        self.hud.set_game_level(self.game_level)
         self.current_wave = 0  # Current wave within the game level
         self.wave_timer = 0  # Time until next wave spawns (milliseconds)
         self.level_rest_timer = 0  # Time remaining in rest period between levels (0 = not resting)
@@ -101,7 +112,7 @@ class Game:
         self.boss_minion_spawn_timer = 0  # Timer for boss minion spawns
 
         # Timer display
-        self.timer_text = self.canvas.create_text(self.window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
+        # timer handled by HUD
 
         # Ability system
 
@@ -120,13 +131,13 @@ class Game:
         self.current_fps = 0
         self.perf_text = None
         if PERFORMANCE_MONITORING:
-            self.perf_text = self.canvas.create_text(
-                10, 30, anchor='nw', fill='lime', 
-                font=('Courier', 10), text="FPS: 0"
-            )
+            self.perf_text = self.hud.setup_perf()
         
         # Initialize menu manager
         self.menu_manager = MenuManager(self)
+        # Initialize progression and weapon systems
+        self.progression = ProgressionSystem(self)
+        self.weapon = WeaponSystem(self)
         
         # Game state machine (replaces scattered boolean flags)
         self._game_state = GameState.MAIN_MENU
@@ -135,6 +146,8 @@ class Game:
         # Show main menu instead of starting game directly
         self.show_main_menu()
         
+        # Input system
+        self.input = InputSystem(self.KEYSYM_MAP)
         self.root.bind('<KeyPress>', self.on_key_press)
         self.root.bind('<KeyRelease>', self.on_key_release)
         self.canvas.bind('<Button-1>', self.on_canvas_click)
@@ -148,7 +161,7 @@ class Game:
         self.keyboard_layout = 'dvorak'  # 'dvorak' or 'qwerty'
         self.game_over_restart_btn = None  # Reference to restart button
         self.auto_fire_enabled = False  # Auto-fire toggle
-        self.attack_cooldown = 0  # Milliseconds until next attack available (after firing)
+        self.attack_cooldown = 0  # Milliseconds until next attack available (after firing) [legacy]
         
         # Start background music
         start_background_music(self)
@@ -261,6 +274,7 @@ class Game:
             # Clear any menu elements
             if old_state in [GameState.PAUSED, GameState.UPGRADE_MENU, GameState.DEV_MENU]:
                 self.pressed_keys.clear()  # Clear stuck keys
+                self.input.clear()
         elif new_state == GameState.PAUSED:
             # Ensure game loop is not updating
             pass
@@ -323,14 +337,14 @@ class Game:
     def add_xp(self, amount):
         """Add XP and check for level up."""
         self.xp += amount
-        self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
+        self.hud.set_xp(self.xp, self.xp_for_next_level)
         
         if self.xp >= self.xp_for_next_level:
             self.xp -= self.xp_for_next_level
             self.level += 1
             self.xp_for_next_level = int(self.xp_for_next_level * 1.2)  # Scale XP requirement
-            self.canvas.itemconfig(self.level_text, text=f"Level: {self.level}")
-            self.canvas.itemconfig(self.xp_text, text=f"XP: {self.xp}/{self.xp_for_next_level}")
+            self.hud.set_player_level(self.level)
+            self.hud.set_xp(self.xp, self.xp_for_next_level)
             # Show upgrade menu on level up
             if not self.menu_manager.upgrade_menu_active and not self.paused:
                 self.show_upgrade_menu()
@@ -359,13 +373,24 @@ class Game:
         
         # Update score
         self.score += 1
-        self.canvas.itemconfig(self.score_text, text=str(self.score))
+        self.hud.set_score(self.score)
 
     def add_upgrade(self, upgrade_key):
         """Add an upgrade to active upgrades and recompute stats."""
         try:
             if upgrade_key not in WEAPON_UPGRADES and upgrade_key not in LINKED_UPGRADES:
                 return False
+            # Enforce prerequisites for linked upgrades
+            if upgrade_key in LINKED_UPGRADES:
+                req = LINKED_UPGRADES[upgrade_key].get('requires')
+                if req:
+                    if isinstance(req, list):
+                        for r in req:
+                            if r not in self.active_upgrades:
+                                return False
+                    else:
+                        if req not in self.active_upgrades:
+                            return False
             self.active_upgrades.append(upgrade_key)
             self.computed_weapon_stats = self.compute_weapon_stats()
             # Only update player shield if a shield-related upgrade was picked
@@ -387,127 +412,20 @@ class Game:
         return False
 
     def start_game_level(self) -> None:
-        """Initialize a new game level with wave progression."""
-        # Check if this is the boss fight at level 21
-        if self.game_level == 21:
-            self._start_boss_fight()
-            return
-        
-        # Don't clear enemies - let previous level's enemies stay alive
-        # They'll be killed by player or move off screen naturally
-        self.current_wave = 0
-        self.wave_timer = 0
-        self.is_resting = False
-        self.level_rest_timer = 0
-        self._spawn_next_wave()
+        """Initialize a new game level with wave progression (delegated)."""
+        self.progression.start_game_level()
     
     def _spawn_next_wave(self) -> None:
-        """Spawn the next wave of enemies for the current game level."""
-        # Check if level is defined in GAME_LEVEL_WAVES
-        if self.game_level not in GAME_LEVEL_WAVES:
-            # Auto-generate level for levels beyond 20
-            self._spawn_next_wave_autogenerated()
-            return
-        
-        waves = GAME_LEVEL_WAVES[self.game_level]
-        
-        if self.current_wave >= len(waves):
-            # All waves completed, move to rest period then next level
-            print(f"[LEVEL COMPLETE] Level {self.game_level} - all {len(waves)} waves completed, entering rest period")
-            self.is_resting = True
-            self.level_rest_timer = LEVEL_REST_DURATION
-            return
-        
-        wave_info = waves[self.current_wave]
-        enemy_type, count, spawn_delay = wave_info
-        
-        print(f"[WAVE SPAWN] Level {self.game_level}, Wave {self.current_wave + 1}: Spawning {count} {enemy_type} enemies (total enemies: {len(self.enemies)})")
-        
-        # Enforce MAX_ENEMY_COUNT cap
-        available_slots = MAX_ENEMY_COUNT - len(self.enemies)
-        actual_count = min(count, available_slots)
-        
-        if actual_count < count:
-            print(f"[WAVE SPAWN] Capped spawn at {actual_count}/{count} enemies due to MAX_ENEMY_COUNT ({MAX_ENEMY_COUNT})")
-        
-        # Spawn enemies based on type
-        for _ in range(actual_count):
-            x, y = self._get_spawn_position()
-            self._spawn_enemy_by_type(x, y, enemy_type)
-        
-        self.current_wave += 1
-        
-        # Set timer to WAVE_SPAWN_INTERVAL for next wave (waves spawn continuously regardless of alive enemies)
-        self.wave_timer = WAVE_SPAWN_INTERVAL
-        print(f"[WAVE SPAWN] Wave spawned. Total enemies now: {len(self.enemies)}, next wave in 5s")
+        """Spawn the next wave of enemies for the current game level (delegated)."""
+        self.progression.spawn_next_wave()
     
     def _spawn_next_wave_autogenerated(self) -> None:
-        """Generate and spawn a wave for levels beyond 20."""
-        # Auto-generate difficulty based on game level
-        # More enemies, harder types as level increases
-        num_waves = min(6 + (self.game_level // 10), 10)  # 6-10 waves per level
-        num_waves_per_level = max(6, num_waves - self.current_wave)
-        
-        if self.current_wave >= num_waves_per_level:
-            # Level complete
-            self.is_resting = True
-            self.level_rest_timer = LEVEL_REST_DURATION
-            return
-        
-        # Determine enemy types and count based on level - scaling for crazy hoard feel
-        total_enemies = 15 + (self.game_level - 20) * 2  # More enemies as level increases
-        pentagon_ratio = min(0.5, 0.02 * (self.game_level - 20) + 0.1)
-        triangle_ratio = min(0.7, 0.3 + (0.02 * (self.game_level - 20)))
-        
-        pentagons = int(total_enemies * pentagon_ratio)
-        triangles = int(total_enemies * triangle_ratio * (1 - pentagon_ratio))
-        basics = total_enemies - pentagons - triangles
-        
-        # Enforce MAX_ENEMY_COUNT cap
-        available_slots = MAX_ENEMY_COUNT - len(self.enemies)
-        actual_total = min(total_enemies, available_slots)
-        
-        if actual_total < total_enemies:
-            # Scale down proportionally
-            scale = actual_total / total_enemies
-            basics = int(basics * scale)
-            triangles = int(triangles * scale)
-            pentagons = int(pentagons * scale)
-            print(f"[WAVE SPAWN] Scaled autogen spawn to {actual_total}/{total_enemies} enemies due to MAX_ENEMY_COUNT")
-        
-        # Spawn enemies
-        for _ in range(basics):
-            x, y = self._get_spawn_position()
-            self._spawn_enemy_by_type(x, y, 'square')
-        for _ in range(triangles):
-            x, y = self._get_spawn_position()
-            self._spawn_enemy_by_type(x, y, 'triangle')
-        for _ in range(pentagons):
-            x, y = self._get_spawn_position()
-            self._spawn_enemy_by_type(x, y, 'pentagon')
-        
-        self.current_wave += 1
-        self.wave_timer = WAVE_SPAWN_INTERVAL  # Use constant for wave spawn timing
+        """Generate and spawn a wave for levels beyond 20 (delegated)."""
+        self.progression.spawn_next_wave_autogenerated()
     
     def _start_boss_fight(self) -> None:
-        """Initialize the boss fight at level 21."""
-        print("[BOSS] ===== BOSS FIGHT INITIATED =====")
-        self.boss_fight_active = True
-        self.boss_announcement_timer = 3000  # Display announcement for 3 seconds
-        self.boss_minion_spawn_timer = 5000  # First minion wave after 5 seconds
-        
-        # Spawn boss in center of screen
-        boss_x = self.window_width // 2 - ENEMY_SIZE // 2
-        boss_y = self.window_height // 2 - ENEMY_SIZE // 2
-        self.current_boss = BossEnemy(self.canvas, boss_x, boss_y, ENEMY_SIZE)
-        self.enemies.append(self.current_boss)
-        
-        # Clear existing waves/enemies for clean boss fight
-        for enemy in self.enemies[:-1]:  # Keep only the boss
-            self.canvas.delete(enemy.rect)
-        self.enemies = [self.current_boss]
-        
-        print(f"[BOSS] Boss spawned with {self.current_boss.health} HP")
+        """Initialize the boss fight at level 21 (delegated)."""
+        self.progression.start_boss_fight()
     
     def _update_boss_fight(self) -> None:
         """Update boss fight mechanics during combat."""
@@ -904,17 +822,18 @@ class Game:
         self.player.game = self  # Give player reference to game instance for shield pushback
         self.enemies = []
         self.start_game_level()
-        self.score_text = self.canvas.create_text(WIDTH//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
-        self.version_text = self.canvas.create_text(10, HEIGHT - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
-        self.level_text = self.canvas.create_text(WIDTH//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
-        self.xp_text = self.canvas.create_text(WIDTH//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
-        self.timer_text = self.canvas.create_text(WIDTH - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
+        # HUD will manage texts; remove direct canvas text creation
         
         # Restart background music
         start_background_music(self)
 
     def on_key_press(self, event):
         """Handle key press events for movement and actions."""
+        # Route to InputSystem for normalized state
+        try:
+            self.input.on_press(event.keysym)
+        except Exception:
+            pass
         # Check for special keys FIRST (before movement keys)
         if event.keysym == 'space':  # Spacebar
             # If main menu is active, start the game
@@ -958,6 +877,10 @@ class Game:
 
     def on_key_release(self, event):
         """Handle key release events for movement."""
+        try:
+            self.input.on_release(event.keysym)
+        except Exception:
+            pass
         if event.keysym in self.KEYSYM_MAP:
             self.pressed_keys.discard(self.KEYSYM_MAP[event.keysym])
     
@@ -987,7 +910,7 @@ class Game:
             self.player.update_render_position(self.interpolation_factor)
             # Update timer display during gameplay
             time_str = self.format_time(self.game_time_ms)
-            self.canvas.itemconfig(self.timer_text, text=f"Time: {time_str}")
+            self.hud.set_time(time_str)
             
             # Performance monitoring
             if PERFORMANCE_MONITORING and self.perf_text:
@@ -1000,10 +923,7 @@ class Game:
                     entity_count = (len(self.enemies) + len(self.particles) + 
                                   len(self.projectiles) + len(self.shards) + 
                                   len(self.minions) + len(self.black_holes))
-                    self.canvas.itemconfig(
-                        self.perf_text, 
-                        text=f"FPS: {self.current_fps}\nEntities: {entity_count}\nGrid Cells: {len(self.spatial_grid)}"
-                    )
+                    self.hud.set_perf(f"FPS: {self.current_fps}\nEntities: {entity_count}\nGrid Cells: {len(self.spatial_grid)}")
             
             # Force canvas redraw
             self.canvas.update_idletasks()
@@ -1018,6 +938,8 @@ class Game:
         try:
             # Track time played
             self.game_time_ms += 20
+            # Update weapon cooldowns
+            self.weapon.tick(20)
             
             # Auto-fire if enabled (return time limits firing)
             if self.auto_fire_enabled:
@@ -1034,7 +956,11 @@ class Game:
             self.update_minion_projectiles()  # Update minion projectiles
             self.update_ammo_orbs()
             self.update_shield_cooldown()
-            self.update_game_level_progression()  # Update wave and level progression
+            # Update wave and level progression
+            try:
+                self.progression.tick()
+            except Exception:
+                self.update_game_level_progression()
             self._update_boss_fight()  # Update boss fight mechanics if active
         except tk.TclError as e:
             print(f"[UPDATE ERROR] Tkinter error in update loop: {e}")
@@ -1051,16 +977,27 @@ class Game:
     def handle_player_movement(self):
         """Check pressed keys and apply acceleration accordingly."""
         accel_x, accel_y = 0, 0
-        
-        # Check direction keys (now layout-independent)
-        if 'up' in self.pressed_keys:
-            accel_y -= 1
-        if 'down' in self.pressed_keys:
-            accel_y += 1
-        if 'left' in self.pressed_keys:
-            accel_x -= 1
-        if 'right' in self.pressed_keys:
-            accel_x += 1
+        # Prefer normalized InputSystem state, fall back to pressed_keys
+        state = getattr(self, 'input', None).state if getattr(self, 'input', None) else None
+        if state:
+            if state.move_up:
+                accel_y -= 1
+            if state.move_down:
+                accel_y += 1
+            if state.move_left:
+                accel_x -= 1
+            if state.move_right:
+                accel_x += 1
+        else:
+            # Fallback
+            if 'up' in self.pressed_keys:
+                accel_y -= 1
+            if 'down' in self.pressed_keys:
+                accel_y += 1
+            if 'left' in self.pressed_keys:
+                accel_x -= 1
+            if 'right' in self.pressed_keys:
+                accel_x += 1
         
         # Always apply movement (even if accel is 0, friction will slow player)
         self.move_player(accel_x, accel_y)
@@ -1552,14 +1489,14 @@ class Game:
         )
 
     def attack(self):
-        """Launch a projectile if none are active."""
+        """Launch a projectile if none are active (delegates cooldown to WeaponSystem)."""
         # Make sure we're not in a menu
         if self.paused or self.menu_manager.upgrade_menu_active:
             return
         
-        # Check if there's a main projectile active (mini-forks don't block firing)
-        has_main_projectile = any(p for p in self.projectiles if not p.is_mini_fork)
-        if has_main_projectile:  # Can't fire if a main projectile is already active
+        # Check cooldown via weapon system and ensure no main projectile exists
+        has_main_projectile = any(p for p in self.projectiles if not getattr(p, 'is_mini_fork', False))
+        if has_main_projectile or not self.weapon.can_fire():
             return
         
         # Play attack sound asynchronously
@@ -1569,16 +1506,14 @@ class Game:
         
         center_x, center_y = self.player.get_center()
         angle = self.get_attack_direction()
-        
-        # Get weapon stats
-        projectile_speed = self.computed_weapon_stats['projectile_speed']
-        
-        vx = math.cos(angle) * projectile_speed
-        vy = math.sin(angle) * projectile_speed
+        speed = self.computed_weapon_stats.get('projectile_speed', 6)
+        vx = math.cos(angle) * speed
+        vy = math.sin(angle) * speed
         projectile = Projectile(self.canvas, center_x, center_y, vx, vy, self)
-        # Set homing from weapon stats (0 by default, 0.15 if Homing upgrade owned)
-        projectile.homing_strength = self.computed_weapon_stats['homing']
+        projectile.homing_strength = self.computed_weapon_stats.get('homing', 0)
         self.projectiles.append(projectile)
+        # Apply cooldown
+        self.weapon.cooldown_ms = WEAPON_COOLDOWN_MS
 
 if __name__ == '__main__':
     root = tk.Tk()

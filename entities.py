@@ -11,6 +11,34 @@ from constants import *
 from audio import play_sound_async, play_beep_async
 
 
+class BaseEntity:
+    """
+    Base interface for all entities to standardize lifecycle and interaction.
+    """
+    def __init__(self) -> None:
+        self.alive: bool = True
+
+    def update(self, dt_ms: int) -> None:
+        """Advance entity state by dt_ms (milliseconds)."""
+        pass
+
+    def render(self) -> None:
+        """Update entity visual representation if needed."""
+        pass
+
+    def get_position(self) -> Tuple[float, float]:
+        """Return top-left position for rectangle-like entities."""
+        return 0.0, 0.0
+
+    def take_damage(self) -> bool:
+        """Apply 1 damage and return True if still alive."""
+        return self.alive
+
+    def cleanup(self) -> None:
+        """Remove visual artifacts and mark entity as dead."""
+        self.alive = False
+
+
 class BlackHole:
     """
     Represents a black hole effect spawned by weapon hits.
@@ -378,13 +406,14 @@ class Player:
                 self.activate_shield()
 
 
-class Enemy:
+class Enemy(BaseEntity):
     """
     Represents a square (4-sided) enemy in the game.
     Takes 4 hits to defeat. Basic difficulty enemy.
     Handles position, movement towards the player, and rendering.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
+        super().__init__()
         """Initialize square enemy at (x, y) with given size."""
         self.canvas: tk.Canvas = canvas
         self.size: int = size
@@ -437,16 +466,26 @@ class Enemy:
     def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
-        return self.health > 0
+        self.alive = self.health > 0
+        return self.alive
+
+    def cleanup(self) -> None:
+        """Remove enemy from canvas and mark as dead."""
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass
+        self.alive = False
 
 
-class TriangleEnemy:
+class TriangleEnemy(BaseEntity):
     """
     Represents a triangle (3-sided) enemy.
     Takes 2 hits to defeat. Weak enemy type.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize triangle enemy at (x, y) with given size."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
@@ -521,16 +560,25 @@ class TriangleEnemy:
     def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
-        return self.health > 0
+        self.alive = self.health > 0
+        return self.alive
+
+    def cleanup(self) -> None:
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass
+        self.alive = False
 
 
-class PentagonEnemy:
+class PentagonEnemy(BaseEntity):
     """
     Represents a pentagon (5-sided) tank enemy.
     Takes 5 hits to defeat. Strongest enemy type.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize pentagon enemy at (x, y) with given size."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
@@ -596,10 +644,18 @@ class PentagonEnemy:
     def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
-        return self.health > 0
+        self.alive = self.health > 0
+        return self.alive
+
+    def cleanup(self) -> None:
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass
+        self.alive = False
 
 
-class HexagonEnemy:
+class HexagonEnemy(BaseEntity):
     """
     Represents a hexagon (6-sided) split enemy.
     Takes 6 hits to defeat. When killed, splits into 2 triangle enemies.
@@ -607,6 +663,7 @@ class HexagonEnemy:
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize hexagon enemy at (x, y) with given size."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
@@ -673,10 +730,18 @@ class HexagonEnemy:
     def take_damage(self) -> bool:
         """Reduce health by 1. Returns True if enemy is still alive."""
         self.health -= 1
-        return self.health > 0
+        self.alive = self.health > 0
+        return self.alive
+
+    def cleanup(self) -> None:
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass
+        self.alive = False
 
 
-class BossEnemy:
+class BossEnemy(BaseEntity):
     """
     Represents the final boss - an octagon (8-sided) enemy.
     Takes 20 hits to defeat. Spawns smaller enemies (hexagons and pentagons) when damaged.
@@ -684,6 +749,7 @@ class BossEnemy:
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize boss enemy at (x, y) with given size."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
@@ -772,7 +838,8 @@ class BossEnemy:
             self.spawn_counter = 0
             return True  # Still alive, minions will be spawned by game
         
-        return self.health > 0
+        self.alive = self.health > 0
+        return self.alive
     
     def get_phase(self) -> int:
         """Get current boss phase based on health."""
@@ -784,13 +851,21 @@ class BossEnemy:
         else:
             return 3
 
+    def cleanup(self) -> None:
+        try:
+            self.canvas.delete(self.rect)
+        except tk.TclError:
+            pass
+        self.alive = False
 
-class Particle:
+
+class Particle(BaseEntity):
     """
     Represents a particle in a death poof effect.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, life: int) -> None:
         """Initialize particle at (x, y) with velocity (vx, vy) and lifespan."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.x: float = x
         self.y: float = y
@@ -830,15 +905,17 @@ class Particle:
             self.canvas.itemconfig(self.rect, state='hidden')
         except tk.TclError:
             pass  # Canvas item may have already been deleted
+        self.alive = False
 
 
-class Shard:
+class Shard(BaseEntity):
     """
     Represents a shrapnel shard that scatters from a projectile impact.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any, 
                  lifetime: int = 1000, explosive: bool = False) -> None:
         """Initialize shard at (x, y) with velocity (vx, vy) and lifetime in milliseconds."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.game: Any = game
         self.x: float = x
@@ -903,15 +980,16 @@ class Shard:
             self.canvas.delete(self.rect)
         except tk.TclError:
             pass  # Canvas item may have already been deleted
-            pass  # Canvas item may have already been deleted
+        self.alive = False
 
 
-class Projectile:
+class Projectile(BaseEntity):
     """
     Represents a projectile that ricochets between enemies with homing effect.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any) -> None:
         """Initialize projectile at (x, y) with velocity (vx, vy)."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.game: Any = game
         self.x: float = x
@@ -1083,93 +1161,12 @@ class Projectile:
             
             # Black hole: Check if we should spawn a black hole on this hit
             if self.black_hole_level > 0:
-                self._try_spawn_black_hole(ex_center, ey_center)
+                # Delegate to WeaponSystem
+                self.game.weapon.try_spawn_black_hole(ex_center, ey_center)
             
-            # Chain lightning: On initial hit only, trigger a chain through level number of targets
+            # Chain lightning: On initial hit only, trigger centralized handling
             if self.chain_lightning_level > 0 and not self.is_mini_fork and self.bounces == 0:
-                # Number of targets to chain through: equal to chain_lightning_level (level 1 = 1 chain, etc.)
-                num_chain_targets = self.chain_lightning_level
-                
-                # Starting range: 150 + (60 * level), decreases by only 20% per bounce
-                chain_range = 150 + (60 * self.chain_lightning_level)
-                range_multiplier = 0.8  # Each chain reduces range to 80% of previous
-                current_range = chain_range
-                
-                # Build chain path from current enemy, finding closest unhit enemies within range
-                chain_targets = []
-                current_position = (ex_center, ey_center)
-                
-                for bounce_index in range(num_chain_targets):
-                    # Find closest unhit enemy to current position within current range
-                    next_target = None
-                    next_dist_sq = current_range * current_range
-                    
-                    for enemy in self.game.enemies:
-                        if id(enemy) in self.hit_enemies:
-                            continue
-                        ex, ey = enemy.get_position()
-                        ex_center_i = ex + ENEMY_SIZE_HALF
-                        ey_center_i = ey + ENEMY_SIZE_HALF
-                        
-                        dx = ex_center_i - current_position[0]
-                        dy = ey_center_i - current_position[1]
-                        dist_sq = dx * dx + dy * dy
-                        
-                        # Only consider enemies within current range (use squared distance)
-                        if dist_sq < next_dist_sq:
-                            next_dist_sq = dist_sq
-                            next_target = enemy
-                    
-                    if next_target is None:
-                        break  # No more enemies to chain to within range
-                    
-                    chain_targets.append((next_target, bounce_index))  # Store target with its bounce index
-                    self.hit_enemies.add(id(next_target))
-                    next_pos = (next_target.get_position()[0] + ENEMY_SIZE_HALF,
-                              next_target.get_position()[1] + ENEMY_SIZE_HALF)
-                    current_position = next_pos
-                    
-                    # Reduce range for next chain (range falloff)
-                    current_range *= range_multiplier
-                
-                # Draw lightning chain and strike all targets
-                if chain_targets:
-                    # Draw lines connecting the chain
-                    current_ex, current_ey = closest_enemy.get_position()
-                    current_center = (current_ex + ENEMY_SIZE_HALF, current_ey + ENEMY_SIZE_HALF)
-                    
-                    for chain_target, bounce_index in chain_targets:
-                        tx, ty = chain_target.get_position()
-                        tx_center = (tx + ENEMY_SIZE_HALF, ty + ENEMY_SIZE_HALF)
-                        
-                        # Draw lightning line
-                        line_id = self.game.canvas.create_line(
-                            current_center[0], current_center[1],
-                            tx_center[0], tx_center[1],
-                            fill='cyan', width=3
-                        )
-                        
-                        # Delete the line after a short delay
-                        def delete_line(lid=line_id):
-                            try:
-                                self.game.canvas.delete(lid)
-                            except tk.TclError:
-                                pass
-                        self.game.root.after(150, delete_line)
-                        
-                        current_center = tx_center
-                    
-                    # Strike all chain targets and handle forking on odd bounces
-                    for chain_target, bounce_index in chain_targets:
-                        # Check if this is an odd bounce (0-indexed, so 0, 2, 4... are odd in visual terms 1, 3, 5...)
-                        is_odd_bounce = (bounce_index % 2 == 0)  # First bounce is index 0 (visually "1st" = odd)
-                        
-                        # Strike the target
-                        self._strike_lightning_target(chain_target)
-                        
-                        # Create fork on odd bounces
-                        if is_odd_bounce:
-                            self._create_fork_from_target(chain_target)
+                self.game.weapon.handle_chain_lightning(closest_enemy, (ex_center, ey_center))
             
             # Regular bouncing (only if we have bounces left) - happens after chain lightning
             # Chain lightning doesn't prevent normal bouncing
@@ -1377,43 +1374,12 @@ class Projectile:
             self._strike_lightning_target(fork_target)
     
     def _try_spawn_black_hole(self, x: float, y: float) -> None:
-        """Try to spawn a black hole at the given position based on black hole level."""
-        # Only allow one black hole at a time
-        if len(self.game.black_holes) > 0:
-            return  # Already have a black hole active
-        
-        # Calculate chance: 15% base at level 1, increases with level
-        trigger_chance = BLACK_HOLE_TRIGGER_CHANCE * self.black_hole_level
-        
-        # Check if we trigger the black hole
-        if random.random() > trigger_chance:
-            return  # Didn't trigger
-        
-        # Calculate radius based on level: 40 base + 20 per level
-        radius = BLACK_HOLE_BASE_RADIUS + (20 * self.black_hole_level)
-        
-        # Create the black hole
-        black_hole = BlackHole(self.game.canvas, x, y, radius, self.game, self.black_hole_level)
-        self.game.black_holes.append(black_hole)
+        """Deprecated: use WeaponSystem.try_spawn_black_hole."""
+        self.game.weapon.try_spawn_black_hole(x, y)
     
     def _create_split_projectiles(self) -> None:
-        """Create two split projectiles branching off at angles."""
-        # Calculate current velocity angle
-        current_angle = math.atan2(self.vy, self.vx)
-        split_angle_rad = math.radians(PROJECTILE_SPLIT_ANGLE)
-        
-        # Create two projectiles at split angles
-        for angle_offset in [-split_angle_rad, split_angle_rad]:
-            new_angle = current_angle + angle_offset
-            new_vx = math.cos(new_angle) * self.speed
-            new_vy = math.sin(new_angle) * self.speed
-            
-            # Create new projectile at current position
-            new_projectile = Projectile(self.game.canvas, self.x, self.y, new_vx, new_vy, self.game)
-            new_projectile.bounces = self.bounces  # Start at current bounce count
-            new_projectile.hit_enemies = self.hit_enemies.copy()  # Copy hit enemies so they don't re-hit
-            new_projectile.homing_strength = self.homing_strength
-            new_projectile.allow_splits = self.allow_splits
+        """Create two split projectiles branching off at angles (delegated)."""
+        self.game.weapon.create_split_projectiles(self.x, self.y, self.vx, self.vy)
     
     def cleanup(self) -> None:
         """Remove projectile from canvas."""
@@ -1421,15 +1387,17 @@ class Projectile:
             self.canvas.delete(self.rect)
         except tk.TclError:
             pass  # Canvas item may have already been deleted
+        self.alive = False
 
 
-class Minion:
+class Minion(BaseEntity):
     """
     Represents a friendly minion that follows the player and attacks nearby enemies.
     Summoned by the summon_minion upgrade.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, game: Any, minion_size: int = 12) -> None:
         """Initialize minion at (x, y)."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.game: Any = game
         self.x: float = x
@@ -1724,13 +1692,14 @@ class Minion:
         return self.x, self.y
 
 
-class MinionProjectile:
+class MinionProjectile(BaseEntity):
     """
     Represents a projectile fired by a minion.
     Simple projectile that damages enemies on contact.
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, vx: float, vy: float, game: Any) -> None:
         """Initialize minion projectile at (x, y) with velocity (vx, vy)."""
+        super().__init__()
         self.canvas: tk.Canvas = canvas
         self.game: Any = game
         self.x: float = x
@@ -1804,6 +1773,7 @@ class MinionProjectile:
             self.canvas.delete(self.rect)
         except tk.TclError:
             pass  # Canvas item may have already been deleted
+        self.alive = False
 
     def get_position(self) -> Tuple[float, float]:
         """Return the position of the projectile."""

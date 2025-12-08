@@ -42,36 +42,53 @@ A fast-paced top-down shooter where you control a player dodging and defeating e
 - **Pentagon Enemies** - Green pentagons, 5 hits to kill, 7 XP (Levels 10+)
 
 
-## Installation
+## Quick Start
 
-### Option 1: Run Executable (No Python needed)
-1. Download the game folder
-2. Double-click `TopDownGame.exe`
-3. Play!
+### Run from Python (macOS/Linux/Windows)
+1. Install Python 3.12.
+2. In Terminal/Command Prompt:
+  ```sh
+  python -m venv .venv
+  source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+  pip install -r requirements.txt
+  python top_down_game.py
+  ```
 
-### Option 2: Run from Python (Requires Python 3.14+)
-1. Make sure Python is installed
-2. Open Command Prompt in the game folder
-3. Run: `python top_down_game.py`
+### Run tests (headless)
+```sh
+source .venv/bin/activate
+pytest -q
+```
 
 ## Files
 
-- `top_down_game.py` - Main game loop and Game class
-- `entities.py` - All entity classes (Player, enemies, projectiles, particles, shards)
-- `constants.py` - Game configuration (includes level/wave definitions)
-- `sound.py` - Audio system
-- `utils.py` - Utility functions
+- `top_down_game.py` - Main game loop and `Game` class
+- `entities.py` - Player, enemies, projectiles, particles, shards
+- `constants.py` - Tunables (sizes, speeds, waves, upgrade defaults)
+- `systems/` - Weapon, input, progression systems
+- `ui/hud.py` - Heads-up display
+- `audio.py` - Audio backend and helpers
+- `docs/` - Architecture, progression, testing, audio docs
 
-## Building Your Own Executable
+## Build
 
-If you want to rebuild the .exe:
-1. Install Python 3.14+
-2. Open Command Prompt in this folder
-3. Run: `build_game.bat`
-4. The new executable will be in the `dist/` folder
+To build a standalone executable (Windows):
+1. Install Python 3.12
+2. Run:
+  ```sh
+  pip install -r requirements.txt
+  build_game.bat
+  ```
+3. The executable will be created per the PyInstaller spec.
 
 ## Credits
 
 Made with Python and Tkinter.
+
+More details in `docs/`:
+- `docs/architecture.md` — systems overview and update loop
+- `docs/progression.md` — levels, waves, timers, boss
+- `docs/testing.md` — headless tests and coverage
+- `docs/audio.md` — audio behavior and fallbacks
 
 Enjoy the game!

@@ -27,6 +27,8 @@ MANIFEST
 venv/
 ENV/
 env/
+.venv/
+.python-version
 
 # IDE
 .vscode/
@@ -43,6 +45,18 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
+.tox/
 
 # Build artifacts
 *.spec
+# PyInstaller outputs and analysis
+dist/
+build/
+build/**/localpycs/
+build/**/xref-*.html
+build/**/warn-*.txt
+
+# Linters and type checkers
+.mypy_cache/
+.ruff_cache/
