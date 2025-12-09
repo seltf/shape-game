@@ -45,6 +45,9 @@ PLAYER_FRICTION: float = 0.78  # A bit more damping for smoother motion
 # ============================================================================
 ENEMY_SIZE: int = 20
 ENEMY_SIZE_HALF: int = 10  # Pre-calculated ENEMY_SIZE // 2 for performance
+# Boss size - larger than normal enemies for dramatic presence
+BOSS_SIZE: int = ENEMY_SIZE * 4
+BOSS_SIZE_HALF: int = BOSS_SIZE // 2
 
 INITIAL_ENEMY_COUNT: int = 10  # Enemies to spawn at game start
 TESTING_MODE_ENEMY_COUNT: int = 100  # Enemies in testing mode

@@ -10,6 +10,8 @@ from constants import (
     WAVE_SPAWN_INTERVAL,
     ENEMY_SIZE,
     ENEMY_SIZE_HALF,
+    BOSS_SIZE,
+    BOSS_SIZE_HALF,
 )
 from entities import BossEnemy
 
@@ -106,9 +108,9 @@ class ProgressionSystem:
         self.game.boss_fight_active = True
         self.game.boss_announcement_timer = 3000
         self.game.boss_minion_spawn_timer = 5000
-        boss_x = self.game.window_width // 2 - ENEMY_SIZE // 2
-        boss_y = self.game.window_height // 2 - ENEMY_SIZE // 2
-        self.game.current_boss = BossEnemy(self.game.canvas, boss_x, boss_y, ENEMY_SIZE)
+        boss_x = self.game.window_width // 2 - BOSS_SIZE // 2
+        boss_y = self.game.window_height // 2 - BOSS_SIZE // 2
+        self.game.current_boss = BossEnemy(self.game.canvas, boss_x, boss_y, BOSS_SIZE)
         self.game.enemies.append(self.game.current_boss)
         # Clear existing enemies for clean boss fight
         for enemy in self.game.enemies[:-1]:
