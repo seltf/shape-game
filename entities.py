@@ -1068,11 +1068,15 @@ class BossEnemy(Enemy):
     
     def _calculate_octagon_points(self, x: float, y: float, size: int) -> List[float]:
         """Calculate the 8 points of a regular octagon."""
+        # Treat (x, y) as the entity's top-left (consistent with other enemies)
+        cx = x + (size / 2.0)
+        cy = y + (size / 2.0)
+        radius = size / 2.0
         points: List[float] = []
         for i in range(8):
             angle = (2 * math.pi * i / 8) - (math.pi / 8)  # Rotated 22.5 degrees
-            px = x + int((size//2) * math.cos(angle))
-            py = y + int((size//2) * math.sin(angle))
+            px = cx + (radius * math.cos(angle))
+            py = cy + (radius * math.sin(angle))
             points.extend([px, py])
         return points
     
