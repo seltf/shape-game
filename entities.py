@@ -458,7 +458,7 @@ class Enemy(BaseEntity):
         self.shield_immunity: int = 0  # Frames of immunity after shield hit
         self.rect: int = self.canvas.create_rectangle(x, y, x+size, y+size, fill='red')
 
-    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
+    def move_towards(self, target_x: float, target_y: float, speed: int = 4) -> None:
         """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
@@ -546,36 +546,74 @@ class Enemy(BaseEntity):
         except tk.TclError:
             pass
 
-        class RangedEnemy(Enemy):
-            """Enemy that stays put and fires projectiles toward the player periodically."""
-            def __init__(self, canvas: tk.Canvas, x: int, y: int, size: int = ENEMY_SIZE) -> None:
-                super().__init__()
-                self.canvas = canvas
-                self.x = x
-                self.y = y
-                self.size = size
-                self.points: List[int] = []
-                # Visual: use a purple diamond
-                half = size // 2
-                self.points = [x + half, y, x + size, y + half, x + half, y + size, x, y + half]
-                self.rect = canvas.create_polygon(*self.points, fill='#6a00a8', outline='white')
-                # Firing cooldown in ms (logic updates at 20ms)
-                self.fire_timer_ms: int = 0
-                self.fire_interval_ms: int = 1800  # fires roughly every 1.8s
-
-            def get_position(self) -> Tuple[float, float]:
-                return self.x, self.y
-
-            def update_shape(self) -> None:
-                """Recompute diamond points for current position."""
-                half = self.size // 2
-                self.points = [self.x + half, self.y, self.x + self.size, self.y + half,
-                               self.x + half, self.y + self.size, self.x, self.y + half]
-                try:
-                    self.canvas.coords(self.rect, *self.points)
-                except tk.TclError:
-                    pass
         self.alive = False
+
+class RangedEnemy(Enemy):
+    """Enemy that stays put and fires projectiles toward the player periodically."""
+    def __init__(self, canvas: tk.Canvas, x: int, y: int, size: int = ENEMY_SIZE) -> None:
+        # Initialize as a normal enemy, then replace the visual with a diamond
+        super().__init__(canvas, x, y, size)
+        # Ranged enemies are fragile — one hit to kill
+        self.health = 1
+        try:
+            # Remove the default rectangle created by Enemy
+            self.canvas.delete(self.rect)
+        except Exception:
+            pass
+        half = size // 2
+        # Playing-card diamond: inset top/bottom so the shape is fuller (not a thin gem)
+        inset_x = int(size * 0.15)
+        inset_y = int(size * 0.15)
+        self.points: List[int] = [
+            x + half, y + inset_y,                # top (inset)
+            x + size - inset_x, y + half,         # right (wider)
+            x + half, y + size - inset_y,         # bottom (inset)
+            x + inset_x, y + half                  # left (wider)
+        ]
+        self.rect = canvas.create_polygon(*self.points, fill='#6a00a8', outline='white', width=2)
+        # Firing cooldown in ms (logic updates at 20ms)
+        self.fire_timer_ms: int = 0
+        self.fire_interval_ms: int = 1800  # fires roughly every 1.8s
+        # Wandering (small movement around spawn to look natural)
+        self.base_x = float(x)
+        self.base_y = float(y)
+        self.wander_phase = random.random() * (2 * math.pi)
+        self.wander_phase_y = random.random() * (2 * math.pi)
+        # Small random speed and radius so multiple ranged enemies differ
+        self.wander_speed = 0.05 + random.random() * 0.06
+        self.wander_radius = 4.0 + random.random() * 6.0
+
+    def get_position(self) -> Tuple[float, float]:
+        return self.x, self.y
+
+    def update_shape(self) -> None:
+        """Recompute diamond points for current position and update canvas coords."""
+        # Apply light wandering around the base position before drawing
+        try:
+            self.wander_phase += self.wander_speed
+            self.wander_phase_y += self.wander_speed * 0.9
+            ox = math.cos(self.wander_phase) * self.wander_radius
+            oy = math.sin(self.wander_phase_y) * (self.wander_radius * 0.6)
+            # Update logical position used by other systems
+            self.x = self.base_x + ox
+            self.y = self.base_y + oy
+        except Exception:
+            # Fallback: keep current position
+            pass
+
+        half = self.size // 2
+        inset_x = int(self.size * 0.15)
+        inset_y = int(self.size * 0.15)
+        self.points = [
+            self.x + half, self.y + inset_y,
+            self.x + self.size - inset_x, self.y + half,
+            self.x + half, self.y + self.size - inset_y,
+            self.x + inset_x, self.y + half
+        ]
+        try:
+            self.canvas.coords(self.rect, *self.points)
+        except tk.TclError:
+            pass
 
 
 class TriangleEnemy(BaseEntity):
@@ -617,7 +655,7 @@ class TriangleEnemy(BaseEntity):
         ]
         self.rect: int = self.canvas.create_polygon(*self.points, fill='orange')
 
-    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
+    def move_towards(self, target_x: float, target_y: float, speed: int = 4) -> None:
         """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply pop effect if triangle is spawning from hexagon split
         if self.pop_distance_max > 0 and self.pop_distance < self.pop_distance_max:
@@ -752,7 +790,7 @@ class PentagonEnemy(BaseEntity):
             points.extend([px, py])
         return points
     
-    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
+    def move_towards(self, target_x: float, target_y: float, speed: int = 4) -> None:
         """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
@@ -880,7 +918,7 @@ class HexagonEnemy(BaseEntity):
             points.extend([px, py])
         return points
     
-    def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
+    def move_towards(self, target_x: float, target_y: float, speed: int = 4) -> None:
         """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
