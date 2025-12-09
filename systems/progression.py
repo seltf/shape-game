@@ -19,8 +19,8 @@ class ProgressionSystem:
         self.game = game
 
     def start_game_level(self) -> None:
-        # Boss level
-        if self.game.game_level == 21:
+        # Boss level (moved to level 10)
+        if self.game.game_level == 10:
             self.start_boss_fight()
             return
         # Reset wave/rest timers

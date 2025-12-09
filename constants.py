@@ -99,7 +99,7 @@ GAME_LEVEL_WAVES: Dict[int, list] = {
     19: [('hexagon', 60, 0), ('pentagon', 70, 0), ('hexagon', 40, 0), ('square', 80, 0)],
     20: [('hexagon', 70, 0), ('pentagon', 80, 0), ('hexagon', 50, 0), ('square', 100, 0)],
     # Level 21: Boss fight - no other enemies
-    21: [],  # Boss spawned separately in _start_boss_fight()
+    21: [],  # Reserved (boss now spawns at level 10 via progression.start_boss_fight())
 }
 
 # ============================================================================
