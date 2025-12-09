@@ -60,3 +60,7 @@ build/**/warn-*.txt
 # Linters and type checkers
 .mypy_cache/
 .ruff_cache/
+
+# Explicit: ignore any nested __pycache__ directories and compiled python files
+**/__pycache__/
+**/*.pyc
