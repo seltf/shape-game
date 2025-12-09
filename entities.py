@@ -1042,6 +1042,10 @@ class BossEnemy(Enemy):
         self.spawn_counter: int = 0  # Counter for spawning minions on damage
         self.phase: int = 1  # Boss phase (1-3)
         self.phase_change_timer: int = 0  # Timer for phase transitions
+        # Roaming behavior (boss does not chase player)
+        self.roam_target_x: float = float(x)
+        self.roam_target_y: float = float(y)
+        self.roam_change_timer: int = random.randint(60, 200)  # frames until pick new roam target
         # Draw octagon using create_polygon with gold/red color
         self.points: List[float] = self._calculate_octagon_points(x, y, size)
         self.rect: int = self.canvas.create_polygon(*self.points, fill='#FFD700', outline='#FF6600', width=3)
@@ -1057,7 +1061,7 @@ class BossEnemy(Enemy):
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 3) -> None:
-        """Move boss towards (target_x, target_y) by 'speed' pixels with smooth steering."""
+        """Roam the arena slowly instead of chasing the player. Ignores provided target."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
             self.x += self.push_velocity_x
@@ -1073,23 +1077,44 @@ class BossEnemy(Enemy):
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target with velocity blending (slower)
-            dx = target_x - self.x
-            dy = target_y - self.y
+            # Roaming: ignore provided target and move toward internal roam target
+            # Pick a new roam target occasionally
+            self.roam_change_timer -= 1
+            if self.roam_change_timer <= 0:
+                # Determine arena bounds
+                gw = getattr(self, 'game', None)
+                if gw is not None and hasattr(gw, 'window_width') and hasattr(gw, 'window_height'):
+                    win_w = gw.window_width
+                    win_h = gw.window_height
+                else:
+                    # Fallback to constants if game not attached
+                    try:
+                        from constants import WIDTH as win_w, HEIGHT as win_h
+                    except Exception:
+                        win_w, win_h = 800, 600
+                margin = int(self.size * 1.5)
+                self.roam_target_x = random.randint(margin, max(margin+1, win_w - margin))
+                self.roam_target_y = random.randint(margin, max(margin+1, win_h - margin))
+                self.roam_change_timer = random.randint(120, 360)
+
+            dx = self.roam_target_x - self.x
+            dy = self.roam_target_y - self.y
             dist = math.hypot(dx, dy)
+            # Boss moves slowly; lower speed to 0.6 by default
+            boss_speed = 0.6
             if dist > 0:
-                target_vx = (dx / dist) * speed
-                target_vy = (dy / dist) * speed
-                steer = 0.18
+                target_vx = (dx / dist) * boss_speed
+                target_vy = (dy / dist) * boss_speed
+                steer = 0.12
                 self.vx += (target_vx - self.vx) * steer
                 self.vy += (target_vy - self.vy) * steer
-                wobble = 0.03
+                wobble = 0.02
                 self.vx += (random.random() - 0.5) * wobble
                 self.vy += (random.random() - 0.5) * wobble
                 spd = math.hypot(self.vx, self.vy)
-                if spd > speed:
-                    self.vx = (self.vx / spd) * speed
-                    self.vy = (self.vy / spd) * speed
+                if spd > boss_speed:
+                    self.vx = (self.vx / spd) * boss_speed
+                    self.vy = (self.vy / spd) * boss_speed
                 self.x += self.vx
                 self.y += self.vy
         
