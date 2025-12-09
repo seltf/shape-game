@@ -1005,7 +1005,7 @@ class HexagonEnemy(BaseEntity):
         self.alive = False
 
 
-class BossEnemy(BaseEntity):
+class BossEnemy(Enemy):
     """
     Represents the final boss - an octagon (8-sided) enemy.
     Takes 20 hits to defeat. Spawns smaller enemies (hexagons and pentagons) when damaged.
@@ -1013,7 +1013,13 @@ class BossEnemy(BaseEntity):
     """
     def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
         """Initialize boss enemy at (x, y) with given size."""
-        super().__init__()
+        # Initialize as a normal Enemy so boss integrates with enemy systems
+        super().__init__(canvas, x, y, size)
+        # Remove the default rectangle created by Enemy and replace with boss polygon
+        try:
+            self.canvas.delete(self.rect)
+        except Exception:
+            pass
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
