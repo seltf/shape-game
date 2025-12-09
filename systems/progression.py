@@ -136,3 +136,64 @@ class ProgressionSystem:
         self.game.wave_timer -= 20
         if self.game.wave_timer <= 0:
             self.spawn_next_wave()
+
+    def finish_boss_fight(self) -> None:
+        """Handle end-of-boss event: award XP, run post-boss event, and continue progression.
+
+        This keeps the game running (no game over) and advances to the next level after a
+        short victory display and rest period.
+        """
+        print("[BOSS] ===== BOSS FIGHT COMPLETE =====")
+        # Clear boss flags on the game
+        self.game.boss_fight_active = False
+        self.game.current_boss = None
+
+        # Award XP to player
+        xp_reward = 50
+        try:
+            self.game.add_xp(xp_reward)
+        except Exception:
+            # Be tolerant if game doesn't expose add_xp
+            pass
+        print(f"[BOSS] Victory! Awarded {xp_reward} XP")
+
+        # Run a small post-boss event: heal the player a bit if possible
+        try:
+            if hasattr(self.game, 'player') and hasattr(self.game.player, 'health'):
+                # Prefer a small heal rather than full restore
+                if hasattr(self.game.player, 'max_health'):
+                    self.game.player.health = min(self.game.player.max_health, self.game.player.health + 5)
+                else:
+                    self.game.player.health += 5
+        except Exception:
+            pass
+
+        # Show a brief victory message then schedule next level (use rest period)
+        try:
+            victory_text = self.game.canvas.create_text(
+                self.game.window_width // 2, self.game.window_height // 2,
+                text="BOSS DEFEATED!\nProceeding to next level...",
+                font=('Arial', 36, 'bold'), fill='gold', anchor='center'
+            )
+
+            def _continue():
+                try:
+                    self.game.canvas.delete(victory_text)
+                except Exception:
+                    pass
+                # Enter rest period before next level
+                self.game.is_resting = True
+                self.game.level_rest_timer = LEVEL_REST_DURATION
+                # Advance the level and start it
+                self.game.game_level += 1
+                print(f"[BOSS] Next level will be {self.game.game_level}")
+                self.start_game_level()
+
+            # Wait a short time, then continue
+            self.game.canvas.after(3000, _continue)
+        except Exception:
+            # If canvas operations fail, fallback to immediate progression
+            self.game.is_resting = True
+            self.game.level_rest_timer = LEVEL_REST_DURATION
+            self.game.game_level += 1
+            self.start_game_level()

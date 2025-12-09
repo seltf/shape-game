@@ -717,23 +717,21 @@ class Game:
     def _boss_defeated(self) -> None:
         """Handle boss defeat and victory."""
         print("[BOSS] ===== BOSS DEFEATED =====")
+        # Clear boss-local state and delegate post-boss flow to ProgressionSystem
         self.boss_fight_active = False
         self.current_boss = None
-        
-        # Award major XP bonus
-        xp_reward = 50
-        self.add_xp(xp_reward)
-        print(f"[BOSS] Victory! Awarded {xp_reward} XP")
-        
-        # Display victory message briefly
-        victory_text = self.canvas.create_text(
-            self.window_width // 2, self.window_height // 2,
-            text="BOSS DEFEATED!\nGAME COMPLETE!",
-            font=('Arial', 48, 'bold'), fill='gold', anchor='center'
-        )
-        
-        # End game after 3 seconds
-        self.canvas.after(3000, self.game_over)
+
+        # Let progression handle awarding XP, events, and advancing to next level
+        try:
+            self.progression.finish_boss_fight()
+        except Exception:
+            # If progression isn't available for some reason, fallback to awarding XP
+            xp_reward = 50
+            try:
+                self.add_xp(xp_reward)
+            except Exception:
+                pass
+            print(f"[BOSS] Victory! Awarded {xp_reward} XP (fallback)")
     
     def _get_spawn_position(self) -> Tuple[int, int]:
         """Get a random spawn position outside screen bounds."""
