@@ -763,7 +763,9 @@ class Game:
         elif enemy_type == 'hexagon':
             enemy = HexagonEnemy(self.canvas, x, y, ENEMY_SIZE)
         elif enemy_type == 'boss':
-            enemy = BossEnemy(self.canvas, x, y, ENEMY_SIZE)
+            # Spawn boss with the configured boss size (may be larger than ENEMY_SIZE)
+            from constants import BOSS_SIZE
+            enemy = BossEnemy(self.canvas, x, y, BOSS_SIZE)
         elif enemy_type == 'ranged':
             from entities import RangedEnemy
             enemy = RangedEnemy(self.canvas, x, y, ENEMY_SIZE)
