@@ -11,6 +11,13 @@ from constants import *
 from audio import play_sound_async, play_beep_async
 
 
+def enemy_center(enemy: Any) -> Tuple[float, float]:
+    """Return the center (x,y) of an enemy using its size if available."""
+    ex, ey = enemy.get_position()
+    half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+    return ex + half, ey + half
+
+
 class BaseEntity:
     """
     Base interface for all entities to standardize lifecycle and interaction.
@@ -115,8 +122,9 @@ class BlackHole:
         """Pull all nearby enemies toward the black hole center."""
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             
             dx = self.x - ex_center
             dy = self.y - ey_center
@@ -220,8 +228,9 @@ class BlackHole:
         
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             
             dx = ex_center - self.x
             dy = ey_center - self.y
@@ -260,7 +269,8 @@ class BlackHole:
         for enemy in dead_enemies:
             try:
                 ex, ey = enemy.get_position()
-                self.game.create_death_poof(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
+                half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+                self.game.create_death_poof(ex + half, ey + half)
             except Exception:
                 pass
             try:
@@ -1294,8 +1304,9 @@ class Shard(BaseEntity):
         # Check for enemy collision
         for enemy in self.game.enemies[:]:  # Use slice to avoid modification during iteration
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             dx = ex_center - self.x
             dy = ey_center - self.y
             dist_sq = dx * dx + dy * dy
@@ -1402,8 +1413,9 @@ class Projectile(BaseEntity):
         # Apply homing if we have a target
         if self.current_target and self.current_target in self.game.enemies:
             tx, ty = self.current_target.get_position()
-            tx_center = tx + ENEMY_SIZE_HALF
-            ty_center = ty + ENEMY_SIZE_HALF
+            half = getattr(self.current_target, 'size', ENEMY_SIZE) // 2
+            tx_center = tx + half
+            ty_center = ty + half
             dx = tx_center - self.x
             dy = ty_center - self.y
             dist = math.hypot(dx, dy)
@@ -1435,29 +1447,62 @@ class Projectile(BaseEntity):
                    off_x + (self.x + 4) * scale,
                    off_y + (self.y + 4) * scale)
         
-        # Check for enemy collision - use squared distances to avoid sqrt
+        # Check for enemy collision - account for variable enemy sizes and high-speed tunneling
         closest_enemy = None
-        closest_dist_sq = COLLISION_DISTANCE_SQ
-        
+        closest_dist_sq = float('inf')
+        proj_radius = 4  # projectile drawn as oval with ±4
+        # previous position (before this frame's movement) for segment collision checks
+        prev_x = self.x - self.vx
+        prev_y = self.y - self.vy
+
         for enemy in self.game.enemies:
             if id(enemy) in self.hit_enemies:
                 continue
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
+
+            # collision radius is sum of enemy half-size and projectile radius
+            coll_r = half + proj_radius
+            coll_r_sq = coll_r * coll_r
+
+            # Check current position first
             dx = ex_center - self.x
             dy = ey_center - self.y
-            dist_sq = dx * dx + dy * dy  # Squared distance (avoid sqrt)
-            
-            if dist_sq < closest_dist_sq:
+            dist_sq = dx * dx + dy * dy
+
+            hit = False
+            if dist_sq <= coll_r_sq:
+                hit = True
+            else:
+                # Also check segment from previous position to current position to avoid tunneling
+                # Compute squared distance from circle center to segment
+                vx = self.x - prev_x
+                vy = self.y - prev_y
+                if vx == 0 and vy == 0:
+                    seg_dist_sq = dist_sq
+                else:
+                    t = ((ex_center - prev_x) * vx + (ey_center - prev_y) * vy) / (vx*vx + vy*vy)
+                    t = max(0.0, min(1.0, t))
+                    proj_x = prev_x + vx * t
+                    proj_y = prev_y + vy * t
+                    dx2 = ex_center - proj_x
+                    dy2 = ey_center - proj_y
+                    seg_dist_sq = dx2*dx2 + dy2*dy2
+                if seg_dist_sq <= coll_r_sq:
+                    hit = True
+
+            if hit and dist_sq < closest_dist_sq:
                 closest_dist_sq = dist_sq
                 closest_enemy = enemy
         
         if closest_enemy:
             # Hit enemy!
             ex, ey = closest_enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(closest_enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             
             # All enemies can now take damage (sides = health)
             # Triangle (3 sides) = 3 health, Square (4 sides) = 4 health, Pentagon (5 sides) = 5 health
@@ -1547,8 +1592,9 @@ class Projectile(BaseEntity):
             next_target = self._find_next_target()
             if next_target:
                 tx, ty = next_target.get_position()
-                tx_center = tx + ENEMY_SIZE_HALF
-                ty_center = ty + ENEMY_SIZE_HALF
+                half = getattr(next_target, 'size', ENEMY_SIZE) // 2
+                tx_center = tx + half
+                ty_center = ty + half
                 dx = tx_center - self.x
                 dy = ty_center - self.y
                 dist = math.hypot(dx, dy)
@@ -1575,8 +1621,9 @@ class Projectile(BaseEntity):
         closest_dist_sq: float = float('inf')
         for enemy in self.game.enemies:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             dx = ex_center - self.x
             dy = ey_center - self.y
             dist_sq = dx * dx + dy * dy
@@ -1594,8 +1641,9 @@ class Projectile(BaseEntity):
             if id(enemy) in self.hit_enemies:
                 continue
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             dx = ex_center - self.x
             dy = ey_center - self.y
             dist_sq = dx * dx + dy * dy
@@ -2111,8 +2159,9 @@ class MinionProjectile(BaseEntity):
         # Check for enemy collision
         for enemy in self.game.enemies[:]:
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
             
             dx = ex_center - self.x
             dy = ey_center - self.y
