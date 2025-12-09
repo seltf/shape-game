@@ -1700,6 +1700,17 @@ class Game:
             ex, ey = enemy.get_position()
             ex_center = ex + ENEMY_SIZE_HALF
             ey_center = ey + ENEMY_SIZE_HALF
+
+            # Boss uses its own roaming logic (do not chase player here)
+            if isinstance(enemy, BossEnemy):
+                try:
+                    enemy.move_towards(px, py)
+                except Exception:
+                    # Fallback to minimal movement if boss.move_towards fails
+                    pass
+                enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
+                canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                continue
             
             # Calculate direction to player
             dx = px - ex_center
