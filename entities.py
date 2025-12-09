@@ -1823,7 +1823,8 @@ class Minion(BaseEntity):
         self.aggro_drop_distance: int = 250  # Distance from player to drop aggro and return
         self.attack_range: int = 120  # Distance to engage enemies
         self.attack_cooldown: int = 0  # Milliseconds until next attack
-        self.attack_cooldown_reset: int = 600  # Attack every 600ms
+        # Make minions shoot less frequently to reduce their overall damage output
+        self.attack_cooldown_reset: int = 1200  # Attack every 1200ms (was 600ms)
         self.current_target: Optional[Any] = None  # Current enemy being engaged
         
         # Patrol behavior - minions wander around when near player but idle
@@ -2039,7 +2040,8 @@ class Minion(BaseEntity):
         
         if dist > 0:
             # Create minion projectile
-            projectile_speed = 6  # Scaled down for 20ms game tick (was 12 for faster ticks)
+            # Reduce projectile speed so minion shots are less punishing
+            projectile_speed = 4  # Reduced from 6 to 4 for slower minion shots
             vx = (dx / dist) * projectile_speed
             vy = (dy / dist) * projectile_speed
             
