@@ -17,6 +17,7 @@ This doc outlines level progression, waves, timers, and boss flow.
 ## Configuration
 - Defined in `constants.py` (e.g., `GAME_LEVEL_WAVES`, enemy counts, timings).
 - Linked upgrades (prerequisites) enforced in `Game.add_upgrade()`.
+- Base enemy speeds tuned in `top_down_game.py` to adjust difficulty (slower by default).
 
 ## Implementation
 - `systems/progression.py` manages timers and wave spawning.

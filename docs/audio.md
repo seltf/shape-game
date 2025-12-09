@@ -8,8 +8,9 @@ Audio is optional and degrades gracefully if a backend is unavailable.
 - If none available: audio disabled with informative logs
 
 ## Effects
-- Short beep on enemy kill (non-blocking)
-- Future: background music and richer SFX
+- Short beep on clicks/selection and enemy kills (non-blocking)
+- Background music toggled via Settings; stopped on Game Over and during transitions.
+- Title Screen `Quit` stops music before exiting.
 
 ## Configuration
 - Dependencies managed in `requirements.txt`.

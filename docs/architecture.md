@@ -37,10 +37,15 @@ This document provides a lean overview of the current game architecture for quic
 - Projectiles track bounces, returning behavior, and effect triggers.
 
 ## State & UI
-- Game state handled in `Game` (menus, paused, upgrade selection).
+- Game state handled in `Game` (Main Menu/Title Screen, Playing, Paused, Upgrade, Dev, Game Over).
+- Title Screen is a standalone state, rendered via `MenuManager`.
+- Title Screen background: starfield + animated tilted galaxy.
+- Pause menu `Quit`: returns to Title Screen (does not exit app).
+- Title Screen `Quit`: exits the application.
 - HUD updates via `ui/hud.py` with minimal canvas ops.
 
 ## Design Principles
 - Centralize cross-cutting logic (weapon/progression/input/HUD) in systems.
 - Keep gameplay unchanged while improving testability.
 - Prefer canvas dimension queries over global width/height.
+- Render loop always flushes UI across states to avoid blank screens.

@@ -804,6 +804,7 @@ class MenuManager:
             ('Square', 'spawn_square', '#4a8a4a'),
             ('Pentagon', 'spawn_pentagon', '#4a8a4a'),
             ('Hexagon', 'spawn_hexagon', '#4a8a4a'),
+            ('Ranged', 'spawn_ranged', '#4a8a4a'),
             ('Boss', 'spawn_boss', '#8a4a4a'),
             ('Back', 'back_to_dev_menu', '#4a4a4a'),
         ]
@@ -887,6 +888,9 @@ class MenuManager:
             elif action == 'spawn_hexagon':
                 self.game.spawn_enemy('hexagon')
                 print(f"[DEV] Hexagon spawned")
+            elif action == 'spawn_ranged':
+                self.game.spawn_enemy('ranged')
+                print(f"[DEV] Ranged enemy spawned")
             elif action == 'spawn_boss':
                 self.game.spawn_enemy('boss')
                 print(f"[DEV] Boss spawned")

@@ -114,6 +114,7 @@ class Game:
         self.projectiles = []
         self.minions = []  # Track friendly minions
         self.minion_projectiles = []  # Track minion projectiles
+        self.enemy_projectiles = []  # Track enemy projectiles
         self.game_time_ms = 0  # Track time played in milliseconds
         self.active_upgrades = []  # List of active upgrade keys
         self.computed_weapon_stats = self.compute_weapon_stats()  # Cache computed stats
@@ -763,6 +764,9 @@ class Game:
             enemy = HexagonEnemy(self.canvas, x, y, ENEMY_SIZE)
         elif enemy_type == 'boss':
             enemy = BossEnemy(self.canvas, x, y, ENEMY_SIZE)
+        elif enemy_type == 'ranged':
+            from entities import RangedEnemy
+            enemy = RangedEnemy(self.canvas, x, y, ENEMY_SIZE)
         else:  # 'square' (4-sided, basic difficulty)
             enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
         
@@ -1215,6 +1219,7 @@ class Game:
             self.update_black_holes()
             self.update_minions()  # Update friendly minions
             self.update_minion_projectiles()  # Update minion projectiles
+            self.update_enemy_projectiles()  # Update enemy projectiles aimed at player
             self.update_ammo_orbs()
             self.update_shield_cooldown()
             # Update wave and level progression
@@ -1421,6 +1426,51 @@ class Game:
                 projectile.cleanup()
         self.minion_projectiles = alive_projectiles
 
+    def update_enemy_projectiles(self) -> None:
+        """Move enemy-fired projectiles and check collision with player."""
+        if not self.enemy_projectiles:
+            return
+        px, py = self.player.get_center()
+        to_remove = []
+        for proj in self.enemy_projectiles:
+            proj['x'] += proj['vx']
+            proj['y'] += proj['vy']
+            # Update canvas coords with display transform
+            scale = getattr(self, 'display_scale', 1.0)
+            offx = getattr(self, 'offset_x', 0.0)
+            offy = getattr(self, 'offset_y', 0.0)
+            s = proj['size']
+            try:
+                self.canvas.coords(
+                    proj['id'],
+                    offx + (proj['x'] - s//2) * scale,
+                    offy + (proj['y'] - s//2) * scale,
+                    offx + (proj['x'] + s//2) * scale,
+                    offy + (proj['y'] + s//2) * scale,
+                )
+            except tk.TclError:
+                to_remove.append(proj)
+                continue
+            # Collision with player
+            dx = px - proj['x']
+            dy = py - proj['y']
+            if dx*dx + dy*dy <= COLLISION_DISTANCE_SQ:
+                if self.player.shield_active and self.player.shield_rings:
+                    play_beep_async(1200, 50, self)
+                    self.player.deactivate_shield()
+                else:
+                    self.player.health -= 1
+                    if self.player.health <= 0:
+                        self.game_over()
+                to_remove.append(proj)
+        for proj in to_remove:
+            try:
+                self.canvas.delete(proj['id'])
+            except tk.TclError:
+                pass
+            if proj in self.enemy_projectiles:
+                self.enemy_projectiles.remove(proj)
+
     def _update_player_shield(self):
         """Update player shield based on shield upgrade."""
         shield_level = self.computed_weapon_stats.get('shield', 0)
@@ -1606,6 +1656,33 @@ class Game:
                 speed = 1.2  # Pentagons move slower
             elif isinstance(enemy, TriangleEnemy):
                 speed = 1.9  # Triangles medium speed
+            elif enemy.__class__.__name__ == 'RangedEnemy':
+                # Ranged enemy does not chase; it fires periodically
+                speed = 0.0
+                # Fire logic
+                enemy.fire_timer_ms -= 20
+                if enemy.fire_timer_ms <= 0:
+                    enemy.fire_timer_ms = enemy.fire_interval_ms
+                    # Aim at player and spawn a projectile
+                    px, py = self.player.get_center()
+                    ex_center = enemy.x + ENEMY_SIZE_HALF
+                    ey_center = enemy.y + ENEMY_SIZE_HALF
+                    dx = px - ex_center
+                    dy = py - ey_center
+                    dist = math.sqrt(dx*dx + dy*dy) if dx*dx + dy*dy > 0 else 1.0
+                    vx = (dx / dist) * 3.0
+                    vy = (dy / dist) * 3.0
+                    # Create a small red shot
+                    shot_size = 6
+                    shot_id = self.canvas.create_oval(ex_center - shot_size//2, ey_center - shot_size//2,
+                                                      ex_center + shot_size//2, ey_center + shot_size//2,
+                                                      fill='red', outline='white')
+                    self.enemy_projectiles.append({'id': shot_id, 'x': ex_center, 'y': ey_center, 'vx': vx, 'vy': vy, 'size': shot_size})
+                # Update shape to ensure proper redraw
+                try:
+                    enemy.update_shape()
+                except Exception:
+                    pass
             else:  # CircleEnemy, SquareEnemy, HexagonEnemy
                 speed = 2.1  # Others normal speed
             

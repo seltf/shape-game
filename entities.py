@@ -545,6 +545,36 @@ class Enemy(BaseEntity):
             self.canvas.delete(self.rect)
         except tk.TclError:
             pass
+
+        class RangedEnemy(Enemy):
+            """Enemy that stays put and fires projectiles toward the player periodically."""
+            def __init__(self, canvas: tk.Canvas, x: int, y: int, size: int = ENEMY_SIZE) -> None:
+                super().__init__()
+                self.canvas = canvas
+                self.x = x
+                self.y = y
+                self.size = size
+                self.points: List[int] = []
+                # Visual: use a purple diamond
+                half = size // 2
+                self.points = [x + half, y, x + size, y + half, x + half, y + size, x, y + half]
+                self.rect = canvas.create_polygon(*self.points, fill='#6a00a8', outline='white')
+                # Firing cooldown in ms (logic updates at 20ms)
+                self.fire_timer_ms: int = 0
+                self.fire_interval_ms: int = 1800  # fires roughly every 1.8s
+
+            def get_position(self) -> Tuple[float, float]:
+                return self.x, self.y
+
+            def update_shape(self) -> None:
+                """Recompute diamond points for current position."""
+                half = self.size // 2
+                self.points = [self.x + half, self.y, self.x + self.size, self.y + half,
+                               self.x + half, self.y + self.size, self.x, self.y + half]
+                try:
+                    self.canvas.coords(self.rect, *self.points)
+                except tk.TclError:
+                    pass
         self.alive = False
 
 

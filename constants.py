@@ -84,8 +84,8 @@ GAME_LEVEL_WAVES: Dict[int, list] = {
     
     # Level 10-12: Pentagon presence increases, introduce hexagons
     10: [('square', 35, 0), ('pentagon', 15, 0), ('square', 30, 0)],
-    11: [('pentagon', 20, 0), ('square', 35, 0), ('hexagon', 8, 0), ('triangle', 20, 0)],
-    12: [('square', 40, 0), ('pentagon', 25, 0), ('hexagon', 12, 0)],
+    11: [('pentagon', 20, 0), ('square', 35, 0), ('hexagon', 8, 0), ('triangle', 20, 0), ('ranged', 6, 0)],
+    12: [('square', 40, 0), ('pentagon', 25, 0), ('hexagon', 12, 0), ('ranged', 8, 0)],
     
     # Level 13-15: Hexagons ramp up, pentagons provide support
     13: [('hexagon', 15, 0), ('pentagon', 30, 0), ('square', 40, 0)],

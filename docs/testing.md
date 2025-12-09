@@ -3,9 +3,8 @@
 Headless tests validate gameplay without a GUI.
 
 ## Running
-```sh
-source .venv/bin/activate
-pytest -q
+```powershell
+python -m pytest -q
 ```
 
 ## Headless Canvas
@@ -21,7 +20,9 @@ pytest -q
 - `test_progression*`: waves, rest, boss
 - `test_entity_lifecycle_pytest.py`: BaseEntity lifecycle
 - `test_weapon_effects_pytest.py`: chain lightning visuals, black hole spawn
+- Title Screen rendering runs without gameplay; render loop flushes in non-playing states to prevent blank screens.
 
 ## CI (optional)
 - GitHub Actions can run `pytest` across macOS/Linux/Windows with Python 3.12.
 - Add a matrix workflow to ensure cross-OS stability.
+ - For Windows runners, use `python -m pytest` syntax and avoid POSIX-only commands.
