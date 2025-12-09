@@ -255,19 +255,35 @@ class BlackHole:
                 enemy.being_pulled = True
                 enemy.pull_timer = 20  # Fling for 20 frames (~1 second)
         
-        # Clean up dead enemies
-        alive_enemies = []
-        for enemy in self.game.enemies:
-            if not hasattr(enemy, 'health') or enemy.health > 0:
-                alive_enemies.append(enemy)
-            else:
-                # Remove dead enemy from canvas
+        # Clean up dead enemies robustly (avoid mutating the main list while iterating)
+        dead_enemies = [e for e in list(self.game.enemies) if hasattr(e, 'health') and e.health <= 0]
+        for enemy in dead_enemies:
+            try:
                 ex, ey = enemy.get_position()
                 self.game.create_death_poof(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
+            except Exception:
+                pass
+            try:
                 # Use game's kill_enemy method to handle removal and XP
                 self.game.kill_enemy(enemy)
-        
-        self.game.enemies = alive_enemies
+            except Exception:
+                # As a fallback, attempt to remove and delete visuals
+                try:
+                    if enemy in self.game.enemies:
+                        self.game.enemies.remove(enemy)
+                except Exception:
+                    pass
+                try:
+                    self.canvas.delete(enemy.rect)
+                except Exception:
+                    pass
+
+        # Ensure no dead enemies remain in the game's enemy list
+        try:
+            self.game.enemies = [e for e in self.game.enemies if not (hasattr(e, 'health') and e.health <= 0)]
+        except Exception:
+            # If something goes wrong, keep existing list (avoid crash)
+            pass
     
     def cleanup(self) -> None:
         """Remove black hole from canvas."""
