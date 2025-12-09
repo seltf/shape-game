@@ -696,8 +696,24 @@ class MenuManager:
         canvas_width = int(self.canvas.winfo_width())
         canvas_height = int(self.canvas.winfo_height())
         menu_width = int(canvas_width * 0.2)  # 20% of canvas width
-        # Height: title (20) + 14 buttons (35 each) + spacing (5*14) + padding (40) = 610
-        menu_height = 610
+
+        # Actual button definitions shown in the dev menu - used to size the overlay
+        buttons = [
+            ('Upgrades', 'upgrade_submenu', '#4a4a8a'),
+            ('Level Up', 'level_up', '#8a4a4a'),
+            ('Add 100 XP', 'add_xp', '#8a4a4a'),
+            ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
+            ('Spawn Enemy', 'spawn_enemy_submenu', '#4a8a4a'),
+            ('Back', 'back_to_pause', '#4a4a4a'),
+        ]
+
+        num_buttons = len(buttons)
+        title_height = 40
+        button_height = 35
+        button_spacing = 5
+        padding = 40
+        menu_height = title_height + (num_buttons * button_height) + ((num_buttons - 1) * button_spacing) + padding
+
         overlay_x = (canvas_width - menu_width) // 2
         overlay_y = (canvas_height - menu_height) // 2
         overlay_width = menu_width
@@ -719,23 +735,6 @@ class MenuManager:
             font=('Arial', 20, 'bold')
         )
         self.dev_menu_elements.append(title)
-        
-        # Button definitions: (label, action, color)
-        buttons = [
-            ('Add Ricochet', 'upgrade_extra_bounce', '#4a4a8a'),
-            ('Add Shrapnel', 'upgrade_shrapnel', '#4a4a8a'),
-            ('Add Rapid Fire', 'upgrade_rapid_fire', '#4a4a8a'),
-            ('Add Chain Lightning', 'upgrade_chain_lightning', '#4a4a8a'),
-            ('Add Black Hole', 'upgrade_black_hole', '#4a4a8a'),
-            ('Add Homing', 'upgrade_homing', '#4a4a8a'),
-            ('Add Shield', 'upgrade_shield', '#4a4a8a'),
-            ('Summon Minion', 'upgrade_summon_minion', '#4a4a8a'),
-            ('Level Up', 'level_up', '#8a4a4a'),
-            ('Add 100 XP', 'add_xp', '#8a4a4a'),
-            ('Spawn 30 Enemies', 'spawn_enemies_cmd', '#4a8a4a'),
-            ('Spawn Enemy', 'spawn_enemy_submenu', '#4a8a4a'),
-            ('Back', 'back_to_pause', '#4a4a4a'),
-        ]
         
         button_width = overlay_width - 40
         button_height = 35
@@ -838,9 +837,99 @@ class MenuManager:
             )
             self.dev_menu_elements.append(text_id)
 
+    def show_upgrade_submenu(self) -> None:
+        """Display the dev upgrades submenu."""
+        self.dev_submenu_active = True
+
+        # Create overlay - size the height based on number of buttons
+        canvas_width = int(self.canvas.winfo_width())
+        canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.2)
+
+        # Button definitions: upgrade buttons and back
+        buttons = [
+              ('Ricochet', 'upgrade_extra_bounce', '#4a8a4a'),
+              ('Shrapnel', 'upgrade_shrapnel', '#4a8a4a'),
+              ('Rapid Fire', 'upgrade_rapid_fire', '#4a8a4a'),
+              ('Chain Lightning', 'upgrade_chain_lightning', '#4a8a4a'),
+              ('Black Hole', 'upgrade_black_hole', '#4a8a4a'),
+              ('Homing', 'upgrade_homing', '#4a8a4a'),
+              ('Shield', 'upgrade_shield', '#4a8a4a'),
+              ('Summon Minion', 'upgrade_summon_minion', '#4a8a4a'),
+              ('Back', 'back_to_dev_menu', '#4a8a4a'),
+        ]
+
+        num_buttons = len(buttons)
+        title_height = 40
+        button_height = 35
+        button_spacing = 6
+        padding = 20
+        menu_height = title_height + (num_buttons * button_height) + ((num_buttons - 1) * button_spacing) + padding
+
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+        overlay_width = menu_width
+        overlay_height = menu_height
+
+        # Background rectangle
+        overlay_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + overlay_width, overlay_y + overlay_height,
+            fill='#1a1a3e', outline='cyan', width=3
+        )
+        self.dev_menu_elements.append(overlay_id)
+
+        # Title
+        title = self.canvas.create_text(
+            overlay_x + overlay_width // 2, overlay_y + 20,
+            text='DEV UPGRADES',
+            fill='cyan',
+            font=('Arial', 18, 'bold')
+        )
+        self.dev_menu_elements.append(title)
+
+        button_width = overlay_width - 40
+        # Reuse computed button_height and spacing
+        start_y = overlay_y + title_height + 8
+
+        for i, (label, action, color) in enumerate(buttons):
+            btn_y = start_y + i * (button_height + button_spacing)
+
+            btn_x1 = int(overlay_x + 20)
+            btn_y1 = int(btn_y)
+            btn_x2 = int(overlay_x + 20 + button_width)
+            btn_y2 = int(btn_y + button_height)
+
+            btn_id = self.canvas.create_rectangle(
+                btn_x1, btn_y1,
+                btn_x2, btn_y2,
+                fill=color, outline='white', width=1
+            )
+            self.dev_buttons[action] = btn_id
+            self.dev_menu_elements.append(btn_id)
+
+            text_id = self.canvas.create_text(
+                overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
+                text=label,
+                fill='white',
+                font=('Arial', 12)
+            )
+            self.dev_menu_elements.append(text_id)
+
     def _handle_dev_menu_action(self, action: str) -> None:
         """Handle dev menu button actions."""
         try:
+            # Open upgrades submenu
+            if action == 'upgrade_submenu':
+                for element_id in self.dev_menu_elements:
+                    try:
+                        self.canvas.delete(element_id)
+                    except tk.TclError:
+                        pass
+                self.dev_menu_elements = []
+                self.dev_buttons = {}
+                self.show_upgrade_submenu()
+                return
             if action == 'upgrade_extra_bounce':
                 self.game.add_upgrade('extra_bounce')
             elif action == 'upgrade_shrapnel':

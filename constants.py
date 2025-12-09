@@ -66,7 +66,7 @@ WAVE_SPAWN_INTERVAL: int = 5000  # Default milliseconds between wave spawns (5 s
 # Difficulty scales with: triangle(1hp) < circle(1hp) < square(4hp) < pentagon(5hp) < hexagon(6hp, splits)
 GAME_LEVEL_WAVES: Dict[int, list] = {
     # Level 1-2: Intro - all triangles to learn mechanics
-    1: [('triangle', 20, 0)],
+    1: [('triangle', 10, 0)],
     2: [('triangle', 30, 0)],
     
     # Level 3-4: Introduce squares

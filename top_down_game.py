@@ -1616,6 +1616,12 @@ class Game:
                 elif isinstance(enemy, BossEnemy):
                     enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif enemy.__class__.__name__ == 'RangedEnemy':
+                    # Ranged enemy uses a diamond polygon
+                    try:
+                        canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                    except Exception:
+                        pass
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
                 continue  # Skip normal movement logic
@@ -1646,6 +1652,11 @@ class Game:
                 elif isinstance(enemy, BossEnemy):
                     enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif enemy.__class__.__name__ == 'RangedEnemy':
+                    try:
+                        canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                    except Exception:
+                        pass
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
                 continue  # Skip normal movement logic
@@ -1653,9 +1664,9 @@ class Game:
             # Normal movement logic
             # Different speeds for different enemy types
             if isinstance(enemy, PentagonEnemy):
-                speed = 1.2  # Pentagons move slower
+                speed = 0.9  # Pentagons move slower
             elif isinstance(enemy, TriangleEnemy):
-                speed = 1.9  # Triangles medium speed
+                speed = 1.4  # Triangles medium speed
             elif enemy.__class__.__name__ == 'RangedEnemy':
                 # Ranged enemy does not chase; it fires periodically
                 speed = 0.0
@@ -1684,7 +1695,7 @@ class Game:
                 except Exception:
                     pass
             else:  # CircleEnemy, SquareEnemy, HexagonEnemy
-                speed = 2.1  # Others normal speed
+                speed = 1.6  # Others normal speed (slightly reduced)
             
             ex, ey = enemy.get_position()
             ex_center = ex + ENEMY_SIZE_HALF
@@ -1750,6 +1761,8 @@ class Game:
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 elif isinstance(enemy, BossEnemy):
                     enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif enemy.__class__.__name__ == 'RangedEnemy':
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
