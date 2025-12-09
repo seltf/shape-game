@@ -225,7 +225,8 @@ class Game:
         self.spatial_grid.clear()
         for enemy in self.enemies:
             ex, ey = enemy.get_position()
-            cell = self._get_grid_cell(ex + ENEMY_SIZE_HALF, ey + ENEMY_SIZE_HALF)
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            cell = self._get_grid_cell(ex + half, ey + half)
             if cell not in self.spatial_grid:
                 self.spatial_grid[cell] = []
             self.spatial_grid[cell].append(enemy)
@@ -784,9 +785,13 @@ class Game:
         spawn_x = px + int(math.cos(angle) * distance)
         spawn_y = py + int(math.sin(angle) * distance)
         
-        # Clamp to screen bounds
-        spawn_x = max(ENEMY_SIZE_HALF, min(self.window_width - ENEMY_SIZE_HALF, spawn_x))
-        spawn_y = max(ENEMY_SIZE_HALF, min(self.window_height - ENEMY_SIZE_HALF, spawn_y))
+        # Clamp to screen bounds (respect size of spawned enemy)
+        if enemy_type == 'boss':
+            from constants import BOSS_SIZE_HALF as half
+        else:
+            half = ENEMY_SIZE_HALF
+        spawn_x = max(half, min(self.window_width - half, spawn_x))
+        spawn_y = max(half, min(self.window_height - half, spawn_y))
         
         self._spawn_enemy_by_type(spawn_x, spawn_y, enemy_type)
 
@@ -1678,8 +1683,9 @@ class Game:
                     enemy.fire_timer_ms = enemy.fire_interval_ms
                     # Aim at player and spawn a projectile
                     px, py = self.player.get_center()
-                    ex_center = enemy.x + ENEMY_SIZE_HALF
-                    ey_center = enemy.y + ENEMY_SIZE_HALF
+                    half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+                    ex_center = enemy.x + half
+                    ey_center = enemy.y + half
                     dx = px - ex_center
                     dy = py - ey_center
                     dist = math.sqrt(dx*dx + dy*dy) if dx*dx + dy*dy > 0 else 1.0
@@ -1700,8 +1706,9 @@ class Game:
                 speed = 1.6  # Others normal speed (slightly reduced)
             
             ex, ey = enemy.get_position()
-            ex_center = ex + ENEMY_SIZE_HALF
-            ey_center = ey + ENEMY_SIZE_HALF
+            half = getattr(enemy, 'size', ENEMY_SIZE) // 2
+            ex_center = ex + half
+            ey_center = ey + half
 
             # Boss uses its own roaming logic (do not chase player here)
             if isinstance(enemy, BossEnemy):
