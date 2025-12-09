@@ -26,16 +26,19 @@ VERSION: str = "0.0.1"  # Game version number
 # ============================================================================
 TESTING_MODE: bool = False  # Set to True to spawn many enemies for testing weapons
 
-WIDTH: int = 600
-HEIGHT: int = 400
+ARENA_WIDTH: int = 1200
+ARENA_HEIGHT: int = 900
+# Logical canvas size used for gameplay space; window may scale visually later
+WIDTH: int = ARENA_WIDTH
+HEIGHT: int = ARENA_HEIGHT
 
 # ============================================================================
 # PLAYER CONFIGURATION
 # ============================================================================
 PLAYER_SIZE: int = 20
-PLAYER_ACCELERATION: float = 2.0  # How quickly player accelerates (scaled for 50 FPS logic)
-PLAYER_MAX_SPEED: int = 3  # Maximum player speed (scaled for 50 FPS logic)
-PLAYER_FRICTION: float = 0.70  # Friction multiplier (0-1, lower = more friction)
+PLAYER_ACCELERATION: float = 2.2  # Slightly higher accel for responsiveness
+PLAYER_MAX_SPEED: float = 3.2  # Slightly increased max speed for snappier movement
+PLAYER_FRICTION: float = 0.78  # A bit more damping for smoother motion
 
 # ============================================================================
 # ENEMY CONFIGURATION

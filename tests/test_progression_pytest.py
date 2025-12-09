@@ -1,18 +1,13 @@
 import pytest
 from constants import GAME_LEVEL_WAVES
 from top_down_game import Game
-import tkinter as tk
+from tests.helpers.mock_canvas import MockCanvas
 
 @pytest.fixture
 def game():
-    root = tk.Tk()
-    root.withdraw()
-    g = Game(root)
+    canvas = MockCanvas()
+    g = Game(root=None, canvas=canvas)
     yield g
-    try:
-        root.destroy()
-    except Exception:
-        pass
 
 def test_boss_triggers_at_21(game):
     game.game_level = 21

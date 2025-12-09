@@ -45,8 +45,34 @@ class Game:
         """Initialize the game window, player, enemies, and event bindings.
         Allows injecting a mock canvas for headless tests.
         """
-        # Create root if not provided (normal runtime)
-        self.root: tk.Tk = root if root is not None else tk.Tk()
+        # Create root if not provided (normal runtime). For tests with a mock canvas,
+        # avoid initializing Tk to prevent _tkinter errors in headless environments.
+        if root is not None:
+            self.root = root
+        else:
+            if canvas is None:
+                self.root = tk.Tk()
+            else:
+                class _DummyRoot:
+                    def update(self):
+                        pass
+                    def bind(self, *args, **kwargs):
+                        pass
+                    def after(self, *args, **kwargs):
+                        pass
+                    def winfo_screenwidth(self):
+                        return WIDTH
+                    def winfo_screenheight(self):
+                        return HEIGHT
+                    def winfo_rootx(self):
+                        return 0
+                    def winfo_rooty(self):
+                        return 0
+                    def title(self, *args, **kwargs):
+                        pass
+                    def state(self, *args, **kwargs):
+                        pass
+                self.root = _DummyRoot()
         
         # Use provided canvas (tests) or create one
         if canvas is not None:
@@ -66,8 +92,15 @@ class Game:
         if self.window_height <= 1:
             self.window_height = self.root.winfo_height()
         
+        # Display scaling state (logical arena -> display transform)
+        self.display_scale: float = 1.0
+        self.offset_x: float = 0.0
+        self.offset_y: float = 0.0
+
         # Draw starfield background
         self._draw_starfield()
+        # Galaxy background particles (for title screen)
+        self.galaxy_particles: List[Dict[str, Any]] = []
         
         self.score = 0
         self.hud = HUD(self.canvas, self.window_width, self.window_height, VERSION)
@@ -166,6 +199,12 @@ class Game:
         # Start background music
         start_background_music(self)
         
+        # Bind resize to keep aspect ratio scaling (no-op on dummy root)
+        try:
+            self.root.bind('<Configure>', self.on_resize)
+        except Exception:
+            pass
+
         # Schedule render loop at 120 FPS (~8ms) and logic loop at 50 FPS (20ms)
         self.root.after(8, self.update)
         self.root.after(20, self.schedule_logic_updates)
@@ -301,6 +340,180 @@ class Game:
             )
             # Send to back so it doesn't interfere with game elements
             self.canvas.tag_lower(star)
+
+    def _init_galaxy(self) -> None:
+        """Initialize a simple galaxy simulation for the title screen background."""
+        self.galaxy_particles.clear()
+        cx = self.window_width // 2
+        cy = self.window_height // 2
+        # Andromeda-like: more arms, elongated disk, bright core
+        arms = 5
+        count = 600  # Denser spiral arms
+        max_r = int(min(self.window_width, self.window_height) * 0.48)
+        # Elliptical scaling to elongate horizontally
+        ellipse_x = 1.20
+        ellipse_y = 0.60
+        # Tilt angle (in radians) to view at a stronger angle (closer to edge-on)
+        tilt_angle = math.radians(100)
+        # Additional rotation to rotate the whole galaxy 90° to the left (counterclockwise)
+        view_rotation = math.radians(90)
+        cos_t = math.cos(tilt_angle)
+        sin_t = math.sin(tilt_angle)
+        cos_v = math.cos(view_rotation)
+        sin_v = math.sin(view_rotation)
+        for i in range(count):
+            arm = i % arms
+            frac = i / float(count)
+            r = frac * max_r
+            # Tighter spiral with per-arm offset
+            theta = frac * 10.0 + (arm * (2 * math.pi / arms))
+            # Dust lane jitter to add texture
+            jitter = (random.random() - 0.5) * 0.35
+            px = (r * math.cos(theta)) * ellipse_x
+            py = (r * math.sin(theta)) * ellipse_y
+            # Apply tilt rotation around center
+            rx = px * cos_t - py * sin_t
+            ry = px * sin_t + py * cos_t
+            # Apply overall view rotation (90° left)
+            vx = rx * cos_v - ry * sin_v
+            vy = rx * sin_v + ry * cos_v
+            x = cx + vx
+            y = cy + vy
+            # Brighter core, slight bluish tint overall
+            size = 3 if r < max_r * 0.25 else (2 if r < max_r * 0.5 else 1)
+            base = 200 - int((r / max_r) * 130)
+            b = max(80, base)
+            g = max(70, base - 10)
+            # Slightly higher blue for a cool tone
+            color = f'#{g:02x}{g:02x}{b:02x}'
+            item = self.canvas.create_oval(x - size, y - size, x + size, y + size, fill=color, outline=color)
+            self.canvas.tag_lower(item)
+            self.galaxy_particles.append({
+                'item': item,
+                'r': r,
+                'theta': theta + jitter,
+                'size': size,
+                'speed': 0.003 + frac * 0.005,
+                'cx': cx,
+                'cy': cy,
+                'ellipse_x': ellipse_x,
+                'ellipse_y': ellipse_y,
+                'tilt_cos': cos_t,
+                'tilt_sin': sin_t,
+                'view_cos': cos_v,
+                'view_sin': sin_v,
+            })
+
+        # Add a denser core glow: random small particles near center
+        core_particles = 120
+        for _ in range(core_particles):
+            # Random radius biased toward center
+            rr = (random.random() ** 2) * (max_r * 0.18)
+            ang = random.random() * 2 * math.pi
+            px = rr * math.cos(ang) * ellipse_x
+            py = rr * math.sin(ang) * ellipse_y
+            # Apply tilt and view rotation
+            rx = px * cos_t - py * sin_t
+            ry = px * sin_t + py * cos_t
+            vx = rx * cos_v - ry * sin_v
+            vy = rx * sin_v + ry * cos_v
+            x = cx + vx
+            y = cy + vy
+            size = 2
+            base = 220
+            b = base
+            g = base - 10
+            color = f'#{g:02x}{g:02x}{b:02x}'
+            item = self.canvas.create_oval(x - size, y - size, x + size, y + size, fill=color, outline=color)
+            self.canvas.tag_lower(item)
+            self.galaxy_particles.append({
+                'item': item,
+                'r': rr,
+                'theta': ang,
+                'size': size,
+                'speed': 0.002,
+                'cx': cx,
+                'cy': cy,
+                'ellipse_x': ellipse_x,
+                'ellipse_y': ellipse_y,
+                'tilt_cos': cos_t,
+                'tilt_sin': sin_t,
+                'view_cos': cos_v,
+                'view_sin': sin_v,
+            })
+
+    def _update_galaxy(self) -> None:
+        """Animate galaxy particles by slowly rotating the spiral arms."""
+        if not self.galaxy_particles:
+            return
+        scale = getattr(self, 'display_scale', 1.0)
+        offx = getattr(self, 'offset_x', 0.0)
+        offy = getattr(self, 'offset_y', 0.0)
+        for p in self.galaxy_particles:
+            p['theta'] += p['speed']
+            # Elliptical spiral
+            px = (p['r'] * math.cos(p['theta'])) * p.get('ellipse_x', 1.0)
+            py = (p['r'] * math.sin(p['theta'])) * p.get('ellipse_y', 1.0)
+            # Apply tilt rotation around center using precomputed cos/sin
+            cos_t = p.get('tilt_cos', 1.0)
+            sin_t = p.get('tilt_sin', 0.0)
+            rx = px * cos_t - py * sin_t
+            ry = px * sin_t + py * cos_t
+            # Apply overall view rotation (90° left)
+            cos_v = p.get('view_cos', 1.0)
+            sin_v = p.get('view_sin', 0.0)
+            vx = rx * cos_v - ry * sin_v
+            vy = rx * sin_v + ry * cos_v
+            x = p['cx'] + vx
+            y = p['cy'] + vy
+            dx = offx + x * scale
+            dy = offy + y * scale
+            s = p['size'] * max(1.0, scale)
+            try:
+                self.canvas.coords(p['item'], dx - s, dy - s, dx + s, dy + s)
+            except tk.TclError:
+                pass
+
+    def _compute_scale_and_offsets(self, new_width: int, new_height: int) -> Tuple[float, float, float]:
+        """Compute uniform scale to preserve aspect ratio and center with offsets."""
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = WIDTH, HEIGHT
+        scale_x = max(0.0001, new_width / float(arena_w))
+        scale_y = max(0.0001, new_height / float(arena_h))
+        scale = min(scale_x, scale_y)
+        target_w = arena_w * scale
+        target_h = arena_h * scale
+        # Center the arena (letterboxing if needed)
+        offset_x = (new_width - target_w) / 2.0
+        offset_y = (new_height - target_h) / 2.0
+        return scale, offset_x, offset_y
+
+    def on_resize(self, event) -> None:
+        """Handle window resize: scale canvas items uniformly and center the arena."""
+        try:
+            new_w = int(event.width)
+            new_h = int(event.height)
+            if new_w <= 0 or new_h <= 0:
+                return
+            # Compute new scale and offsets but defer visual scaling to render-time
+            new_scale, new_off_x, new_off_y = self._compute_scale_and_offsets(new_w, new_h)
+            # Update canvas size to new window size
+            try:
+                self.canvas.config(width=new_w, height=new_h)
+            except tk.TclError:
+                pass
+            # Store new transform
+            self.display_scale = new_scale
+            self.offset_x = new_off_x
+            self.offset_y = new_off_y
+            # Track window dims
+            self.window_width = new_w
+            self.window_height = new_h
+        except Exception as e:
+            print(f"[RESIZE] Error handling resize: {e}")
 
     def compute_weapon_stats(self):
         """Compute effective weapon stats based on base stats and active upgrades."""
@@ -621,10 +834,15 @@ class Game:
     def get_attack_direction(self):
         """Calculate the angle from the player to the mouse cursor."""
         px, py = self.player.get_center()
-        mouse_x = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
-        mouse_y = self.canvas.winfo_pointery() - self.canvas.winfo_rooty()
-        dx = mouse_x - px
-        dy = mouse_y - py
+        # Pointer position relative to canvas
+        mouse_x_screen = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
+        mouse_y_screen = self.canvas.winfo_pointery() - self.canvas.winfo_rooty()
+        # Convert to logical arena coordinates by reversing transform (render-time scaling only)
+        scale = self.display_scale if self.display_scale > 0 else 1.0
+        logical_x = (mouse_x_screen - self.offset_x) / scale
+        logical_y = (mouse_y_screen - self.offset_y) / scale
+        dx = logical_x - px
+        dy = logical_y - py
         angle = math.atan2(dy, dx)
         return angle
 
@@ -638,14 +856,12 @@ class Game:
     def on_canvas_click(self, event):
         """Handle canvas clicks - routes to appropriate menu or attack."""
         try:
-            # If main menu is active, any click starts the game
-            if self.main_menu_active:
-                self.start_game_from_menu()
-                return
-            
-            # If main menu is active, any click starts the game
-            if self.main_menu_active:
-                self.start_game_from_menu()
+            # If main menu is active, route to menu manager
+            if self.menu_manager.main_menu_active:
+                self.menu_manager.handle_main_menu_click(event)
+                # If still active (settings/credits), route those clicks too
+                if self.menu_manager.main_menu_active:
+                    self.menu_manager.handle_settings_or_credits_click(event)
                 return
             
             # If game over screen is showing, handle restart button click
@@ -700,29 +916,8 @@ class Game:
         self.menu_manager.close_upgrade_menu()
 
     def show_main_menu(self):
-        """Display the main menu at game start."""
-        self.set_state(GameState.MAIN_MENU)
-        self.canvas.delete('all')
-        self._draw_starfield()
-        
-        # Title
-        self.canvas.create_text(
-            self.window_width // 2, self.window_height // 2 - 100,
-            text='SHAPE GAME',
-            fill='cyan',
-            font=('Arial', 64, 'bold')
-        )
-        
-        # Subtitle
-        self.canvas.create_text(
-            self.window_width // 2, self.window_height // 2 - 20,
-            text='Click to Start or Press SPACE',
-            fill='lime',
-            font=('Arial', 24)
-        )
-        
-        # Store references for click detection
-        self.main_menu_start_rect = None
+        """Display the main menu at game start (delegate to MenuManager)."""
+        self.menu_manager.show_main_menu()
 
     def start_game_from_menu(self):
         """Start the game after main menu."""
@@ -739,13 +934,13 @@ class Game:
                 fill='blue'
             )
             
-            # Reinitialize game UI
-            self.score_text = self.canvas.create_text(self.window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text=str(self.score))
-            self.version_text = self.canvas.create_text(10, self.window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{VERSION}")
-            self.level_text = self.canvas.create_text(self.window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text=f"Level: {self.level}")
-            self.xp_text = self.canvas.create_text(self.window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text=f"XP: {self.xp}/{self.xp_for_next_level}")
-            self.game_level_text = self.canvas.create_text(self.window_width//2, 130, anchor='n', fill='orange', font=('Arial', 16), text=f"Game Level: {self.game_level}")
-            self.timer_text = self.canvas.create_text(self.window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
+            # Reinitialize HUD (texts were deleted with canvas)
+            self.hud = HUD(self.canvas, self.window_width, self.window_height, VERSION)
+            self.hud.set_score(self.score)
+            self.hud.set_player_level(self.level)
+            self.hud.set_xp(self.xp, self.xp_for_next_level)
+            self.hud.set_game_level(self.game_level)
+            self.hud.set_time(self.format_time(self.game_time_ms))
             self.start_game_level()
 
     def show_pause_menu(self):
@@ -755,6 +950,50 @@ class Game:
     def hide_pause_menu(self):
         """Hide the pause menu and resume the game."""
         self.menu_manager.hide_pause_menu()
+
+    def return_to_main_menu(self) -> None:
+        """Fully reset the game state and return to the main menu."""
+        # Stop background music during transition
+        stop_background_music()
+        # Clear gameplay state
+        self.canvas.delete('all')
+        self.enemies.clear()
+        self.particles.clear()
+        self.projectiles.clear()
+        self.shards.clear()
+        self.black_holes.clear()
+        self.minions.clear()
+        self.minion_projectiles.clear()
+        self.active_upgrades.clear()
+        self.computed_weapon_stats = self.compute_weapon_stats()
+        self.xp = 0
+        self.level = 0
+        self.xp_for_next_level = 10
+        self.score = 0
+        self.game_time_ms = 0
+        self.game_started = False
+        # Reset input and state
+        self.pressed_keys.clear()
+        self.set_state(GameState.MAIN_MENU)
+        # Recreate HUD fresh when game starts later; draw background now
+        # Ensure window dimensions are up to date
+        try:
+            self.root.update()
+        except Exception:
+            pass
+        self.window_width = int(self.canvas.winfo_width()) or self.window_width
+        self.window_height = int(self.canvas.winfo_height()) or self.window_height
+        self._draw_starfield()
+        self._init_galaxy()
+        # Reset menu manager to a clean state and show main menu
+        self.menu_manager = MenuManager(self)
+        self.menu_manager.show_main_menu()
+        # Ensure immediate visual update
+        try:
+            self.canvas.update_idletasks()
+            self.root.update()
+        except Exception:
+            pass
 
     def quit_game(self):
         """Close the game window and exit."""
@@ -787,6 +1026,14 @@ class Game:
     def on_pause_menu_click(self, event):
         """Handle pause menu button clicks."""
         self.menu_manager.handle_pause_menu_click(event)
+
+    def on_main_menu_click(self, event):
+        """Handle main menu clicks and route to the right handler."""
+        if self.menu_manager.main_menu_active:
+            self.menu_manager.handle_main_menu_click(event)
+            # If still active (in a sub-view), route to settings/credits handler
+            if self.menu_manager.main_menu_active:
+                self.menu_manager.handle_settings_or_credits_click(event)
 
     def restart_game(self):
         """Restart the game, resetting player, enemies, and score."""
@@ -822,7 +1069,13 @@ class Game:
         self.player.game = self  # Give player reference to game instance for shield pushback
         self.enemies = []
         self.start_game_level()
-        # HUD will manage texts; remove direct canvas text creation
+        # Reinitialize HUD after clearing canvas
+        self.hud = HUD(self.canvas, self.window_width, self.window_height, VERSION)
+        self.hud.set_score(self.score)
+        self.hud.set_player_level(self.level)
+        self.hud.set_xp(self.xp, self.xp_for_next_level)
+        self.hud.set_game_level(self.game_level)
+        self.hud.set_time(self.format_time(self.game_time_ms))
         
         # Restart background music
         start_background_music(self)
@@ -837,7 +1090,8 @@ class Game:
         # Check for special keys FIRST (before movement keys)
         if event.keysym == 'space':  # Spacebar
             # If main menu is active, start the game
-            if self.main_menu_active:
+            if self.menu_manager.main_menu_active:
+                self.menu_manager.close_main_menu()
                 self.start_game_from_menu()
                 return
             # Otherwise toggle auto-fire
@@ -924,9 +1178,16 @@ class Game:
                                   len(self.projectiles) + len(self.shards) + 
                                   len(self.minions) + len(self.black_holes))
                     self.hud.set_perf(f"FPS: {self.current_fps}\nEntities: {entity_count}\nGrid Cells: {len(self.spatial_grid)}")
-            
-            # Force canvas redraw
+        
+        # Animate title screen background when in MAIN_MENU
+        if self._game_state == GameState.MAIN_MENU:
+            self._update_galaxy()
+
+        # Force canvas redraw in all states (including MAIN_MENU)
+        try:
             self.canvas.update_idletasks()
+        except Exception:
+            pass
         self.root.after(8, self.update)
 
     def update_logic(self):
@@ -1253,15 +1514,22 @@ class Game:
             # Only draw orb if it's available (not fired)
             if i < available_ammo:
                 # Draw filled orb as a yellow circle matching the projectile (8x8 pixels)
+                scale = self.display_scale if self.display_scale > 0 else 1.0
+                off_x = self.offset_x
+                off_y = self.offset_y
                 orb_id = self.canvas.create_oval(
-                    orb_x - 4, orb_y - 4,
-                    orb_x + 4, orb_y + 4,
+                    off_x + (orb_x - 4) * scale,
+                    off_y + (orb_y - 4) * scale,
+                    off_x + (orb_x + 4) * scale,
+                    off_y + (orb_y + 4) * scale,
                     fill='yellow'
                 )
                 self.ammo_orbs.append(orb_id)
 
     def move_enemies(self):
-        """Move all enemies towards the player with optimized collision avoidance."""
+        """Move all enemies towards the player with optimized collision avoidance.
+        Uses float positions (no int rounding) and updates polygons correctly.
+        """
         px, py = self.player.get_center()
         
         # Mark grid for rebuild after all movements
@@ -1275,8 +1543,8 @@ class Game:
             # Check if enemy is being pushed by shield or pulled by black hole
             if (hasattr(enemy, 'being_pushed') and enemy.being_pushed and enemy.push_timer > 0):
                 # Apply push movement
-                enemy.x += int(enemy.push_velocity_x)
-                enemy.y += int(enemy.push_velocity_y)
+                enemy.x += enemy.push_velocity_x
+                enemy.y += enemy.push_velocity_y
                 enemy.push_timer -= 1
                 if enemy.push_timer <= 0:
                     enemy.being_pushed = False
@@ -1289,6 +1557,15 @@ class Game:
                         enemy.x + enemy.size, enemy.y + enemy.size
                     ]
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, PentagonEnemy):
+                    enemy.points = enemy._calculate_pentagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, HexagonEnemy):
+                    enemy.points = enemy._calculate_hexagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, BossEnemy):
+                    enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
                 continue  # Skip normal movement logic
@@ -1296,8 +1573,8 @@ class Game:
             # Check if enemy is being pulled by black hole
             if (hasattr(enemy, 'being_pulled') and enemy.being_pulled and enemy.pull_timer > 0):
                 # Apply pull movement
-                enemy.x += int(enemy.pull_velocity_x)
-                enemy.y += int(enemy.pull_velocity_y)
+                enemy.x += enemy.pull_velocity_x
+                enemy.y += enemy.pull_velocity_y
                 enemy.pull_timer -= 1
                 if enemy.pull_timer <= 0:
                     enemy.being_pulled = False
@@ -1310,6 +1587,15 @@ class Game:
                         enemy.x + enemy.size, enemy.y + enemy.size
                     ]
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, PentagonEnemy):
+                    enemy.points = enemy._calculate_pentagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, HexagonEnemy):
+                    enemy.points = enemy._calculate_hexagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, BossEnemy):
+                    enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
                 continue  # Skip normal movement logic
@@ -1317,11 +1603,11 @@ class Game:
             # Normal movement logic
             # Different speeds for different enemy types
             if isinstance(enemy, PentagonEnemy):
-                speed = 1.5  # Pentagons move slower
+                speed = 1.2  # Pentagons move slower
             elif isinstance(enemy, TriangleEnemy):
-                speed = 2.2  # Triangles medium speed
+                speed = 1.9  # Triangles medium speed
             else:  # CircleEnemy, SquareEnemy, HexagonEnemy
-                speed = 2.4  # Others normal speed
+                speed = 2.1  # Others normal speed
             
             ex, ey = enemy.get_position()
             ex_center = ex + ENEMY_SIZE_HALF
@@ -1367,9 +1653,9 @@ class Game:
                         move_x += avoidance_x
                         move_y += avoidance_y
                 
-                # Apply movement directly
-                enemy.x += int(move_x)
-                enemy.y += int(move_y)
+                # Apply movement directly (floats)
+                enemy.x += move_x
+                enemy.y += move_y
                 
                 # Prepare canvas update (batch for performance)
                 if isinstance(enemy, TriangleEnemy):
@@ -1379,15 +1665,33 @@ class Game:
                         enemy.x + enemy.size, enemy.y + enemy.size
                     ]
                     canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, PentagonEnemy):
+                    enemy.points = enemy._calculate_pentagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, HexagonEnemy):
+                    enemy.points = enemy._calculate_hexagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
+                elif isinstance(enemy, BossEnemy):
+                    enemy.points = enemy._calculate_octagon_points(enemy.x, enemy.y, enemy.size)
+                    canvas_updates.append((enemy.rect, 'polygon', enemy.points))
                 else:
                     canvas_updates.append((enemy.rect, 'rect', (enemy.x, enemy.y, enemy.x + enemy.size, enemy.y + enemy.size)))
         
-        # Batch apply all canvas updates
+        # Batch apply all canvas updates with render-time scaling
+        scale = self.display_scale if self.display_scale > 0 else 1.0
+        off_x = self.offset_x
+        off_y = self.offset_y
         for rect_id, shape_type, coords in canvas_updates:
             if shape_type == 'polygon':
-                self.canvas.coords(rect_id, *coords)
+                dcoords = []
+                for i in range(0, len(coords), 2):
+                    lx = coords[i]
+                    ly = coords[i+1]
+                    dcoords.extend([off_x + lx * scale, off_y + ly * scale])
+                self.canvas.coords(rect_id, *dcoords)
             else:
-                self.canvas.coords(rect_id, *coords)
+                x1, y1, x2, y2 = coords
+                self.canvas.coords(rect_id, off_x + x1 * scale, off_y + y1 * scale, off_x + x2 * scale, off_y + y2 * scale)
 
     def check_player_collision(self) -> None:
         """Check if any enemy collides with player and deal damage."""
@@ -1518,13 +1822,11 @@ class Game:
 if __name__ == '__main__':
     root = tk.Tk()
     root.title('Top Down Game Prototype')
-    # Maximize window
-    root.state('zoomed')
-    # Get screen size
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    # Update global WIDTH and HEIGHT
-    WIDTH = screen_width
-    HEIGHT = screen_height
+    # Use fixed logical arena size from constants; avoid auto-zoom to keep balance consistent
+    try:
+        from constants import ARENA_WIDTH, ARENA_HEIGHT
+    except Exception:
+        ARENA_WIDTH, ARENA_HEIGHT = WIDTH, HEIGHT
+    root.geometry(f"{ARENA_WIDTH}x{ARENA_HEIGHT}")
     game = Game(root)
     root.mainloop()

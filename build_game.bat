@@ -29,6 +29,10 @@ REM PyInstaller with all necessary modules from refactored structure
     --hidden-import=audio ^
     --hidden-import=constants ^
     --hidden-import=utils ^
+    --hidden-import=systems.input ^
+    --hidden-import=systems.progression ^
+    --hidden-import=systems.weapon ^
+    --hidden-import=ui.hud ^
     --distpath=dist ^
     --workpath=build ^
     --specpath=. ^

@@ -54,9 +54,15 @@ class BlackHole:
         self.level: int = level  # Store upgrade level for damage calculation
         self.time_alive: int = 0  # Track lifetime in milliseconds
         self.detonation_phase: bool = False
-        # Visual representation - only outline, no fill so enemies are visible
-        self.rect: int = self.canvas.create_oval(x-radius, y-radius, x+radius, y+radius, 
-                                           fill='', outline='#6600ff', width=2)
+        # Visual representation - only outline, apply display transform for scaling
+        scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+        off_x = getattr(self.game, 'offset_x', 0.0)
+        off_y = getattr(self.game, 'offset_y', 0.0)
+        self.rect: int = self.canvas.create_oval(
+            off_x + (x - radius) * scale, off_y + (y - radius) * scale,
+            off_x + (x + radius) * scale, off_y + (y + radius) * scale,
+            fill='', outline='#6600ff', width=2
+        )
         # Animated rings during pull phase
         self.active_rings: List[List[Any]] = []  # Track canvas IDs of active animated rings
         self.ring_spawn_counter: int = 0  # Counter to spawn rings at intervals
@@ -88,9 +94,12 @@ class BlackHole:
         # Create explosion animation expanding from black hole
         for ring in range(3):
             ring_size = 20 + (ring * 30)
+            scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+            off_x = getattr(self.game, 'offset_x', 0.0)
+            off_y = getattr(self.game, 'offset_y', 0.0)
             ring_id = self.canvas.create_oval(
-                self.x - ring_size, self.y - ring_size,
-                self.x + ring_size, self.y + ring_size,
+                off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
+                off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
                 outline='#6600ff', width=2
             )
             
@@ -158,10 +167,13 @@ class BlackHole:
             else:
                 # Update ring size on canvas
                 try:
+                    scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+                    off_x = getattr(self.game, 'offset_x', 0.0)
+                    off_y = getattr(self.game, 'offset_y', 0.0)
                     self.canvas.coords(
                         ring_id,
-                        self.x - new_size, self.y - new_size,
-                        self.x + new_size, self.y + new_size
+                        off_x + (self.x - new_size) * scale, off_y + (self.y - new_size) * scale,
+                        off_x + (self.x + new_size) * scale, off_y + (self.y + new_size) * scale
                     )
                     # Update the size tracking
                     ring_data[1] = new_size
@@ -176,9 +188,12 @@ class BlackHole:
     def _spawn_new_ring(self) -> None:
         """Spawn a new animated ring at the edge of the pull radius."""
         ring_size = self.radius
+        scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+        off_x = getattr(self.game, 'offset_x', 0.0)
+        off_y = getattr(self.game, 'offset_y', 0.0)
         ring_id = self.canvas.create_oval(
-            self.x - ring_size, self.y - ring_size,
-            self.x + ring_size, self.y + ring_size,
+            off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
+            off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
             outline='#6600ff', width=1.5
         )
         # Store ring data as [id, current_size, max_size]
@@ -323,17 +338,26 @@ class Player:
         """Interpolate and update rendered position based on interpolation factor (0.0 to 1.0)."""
         interp_x = self.prev_x + (self.x - self.prev_x) * interpolation_factor
         interp_y = self.prev_y + (self.y - self.prev_y) * interpolation_factor
-        self.canvas.coords(self.rect, interp_x-self.size//2, interp_y-self.size//2, 
-                          interp_x+self.size//2, interp_y+self.size//2)
+        # Apply display transform (scale + offsets) for render-time scaling
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        dx1 = off_x + (interp_x - self.size//2) * scale
+        dy1 = off_y + (interp_y - self.size//2) * scale
+        dx2 = off_x + (interp_x + self.size//2) * scale
+        dy2 = off_y + (interp_y + self.size//2) * scale
+        self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
         
         # Update shield rings if active
         if self.shield_rings:
             for i, ring in enumerate(self.shield_rings):
                 if ring is not None:
                     shield_radius = self.size // 2 + 15 + (i * 12)
-                    self.canvas.coords(ring, 
-                                      interp_x - shield_radius, interp_y - shield_radius,
-                                      interp_x + shield_radius, interp_y + shield_radius)
+                    rx1 = off_x + (interp_x - shield_radius) * scale
+                    ry1 = off_y + (interp_y - shield_radius) * scale
+                    rx2 = off_x + (interp_x + shield_radius) * scale
+                    ry2 = off_y + (interp_y + shield_radius) * scale
+                    self.canvas.coords(ring, rx1, ry1, rx2, ry2)
 
     def activate_shield(self) -> None:
         """Activate the shield rings around the player based on shield level."""
@@ -419,6 +443,8 @@ class Enemy(BaseEntity):
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.vx: float = 0.0
+        self.vy: float = 0.0
         self.sides: int = 4  # Square = 4 sides
         self.health: int = 4  # Takes 4 hits to kill (sides = strength)
         self.being_pulled: bool = False  # Whether currently pulled by black hole
@@ -433,29 +459,73 @@ class Enemy(BaseEntity):
         self.rect: int = self.canvas.create_rectangle(x, y, x+size, y+size, fill='red')
 
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
-        """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
-            self.x += int(self.push_velocity_x)
-            self.y += int(self.push_velocity_y)
+            self.x += self.push_velocity_x
+            self.y += self.push_velocity_y
             self.push_timer -= 1
             if self.push_timer <= 0:
                 self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
-            self.x += int(self.pull_velocity_x)
-            self.y += int(self.pull_velocity_y)
+            self.x += self.pull_velocity_x
+            self.y += self.pull_velocity_y
             self.pull_timer -= 1
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target
+            # Normal movement: steer toward player with capped acceleration
             dx = target_x - self.x
             dy = target_y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                self.x += int(dx/dist * speed)
-                self.y += int(dy/dist * speed)
+                # Arrival: slow desired speed near target
+                desired_speed = speed
+                arrive_radius = 120
+                if dist < arrive_radius:
+                    desired_speed = max(1.0, speed * (dist / arrive_radius))
+                target_vx = (dx / dist) * desired_speed
+                target_vy = (dy / dist) * desired_speed
+                # Compute desired acceleration toward target velocity
+                ax = (target_vx - self.vx)
+                ay = (target_vy - self.vy)
+                # Cap acceleration magnitude (turn rate)
+                max_accel = 0.45
+                acc_mag = math.hypot(ax, ay)
+                if acc_mag > max_accel:
+                    ax = (ax / acc_mag) * max_accel
+                    ay = (ay / acc_mag) * max_accel
+                self.vx += ax
+                self.vy += ay
+                # Separation from nearby enemies to reduce convergence
+                sep_force_x = 0.0
+                sep_force_y = 0.0
+                sep_radius = 40
+                sep_radius_sq = sep_radius * sep_radius
+                sep_strength = 0.6
+                for other in getattr(self, 'game', None).enemies if hasattr(self, 'game') else []:
+                    if other is self:
+                        continue
+                    ox, oy = other.get_position()
+                    ox += other.size // 2
+                    oy += other.size // 2
+                    sx = (self.x + self.size // 2) - ox
+                    sy = (self.y + self.size // 2) - oy
+                    dsq = sx * sx + sy * sy
+                    if 0 < dsq < sep_radius_sq:
+                        d = math.sqrt(dsq)
+                        sep_force_x += (sx / d) * (sep_strength * (1 - d / sep_radius))
+                        sep_force_y += (sy / d) * (sep_strength * (1 - d / sep_radius))
+                self.vx += sep_force_x
+                self.vy += sep_force_y
+                # Normalize to desired_speed to keep consistent speed
+                spd = math.hypot(self.vx, self.vy)
+                if spd > 0:
+                    self.vx = (self.vx / spd) * desired_speed
+                    self.vy = (self.vy / spd) * desired_speed
+                self.x += self.vx
+                self.y += self.vy
         
         self.canvas.coords(self.rect, self.x, self.y, self.x+self.size, self.y+self.size)
 
@@ -490,6 +560,8 @@ class TriangleEnemy(BaseEntity):
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.vx: float = 0.0
+        self.vy: float = 0.0
         self.sides: int = 3  # Triangle = 3 sides
         self.health: int = 2  # Takes 2 hits to kill
         self.being_pulled: bool = False  # Whether currently pulled by black hole
@@ -516,7 +588,7 @@ class TriangleEnemy(BaseEntity):
         self.rect: int = self.canvas.create_polygon(*self.points, fill='orange')
 
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
-        """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply pop effect if triangle is spawning from hexagon split
         if self.pop_distance_max > 0 and self.pop_distance < self.pop_distance_max:
             self.x += self.pop_velocity_x
@@ -524,26 +596,66 @@ class TriangleEnemy(BaseEntity):
             self.pop_distance += math.hypot(self.pop_velocity_x, self.pop_velocity_y)
         # Apply push force if being pushed by shield
         elif self.being_pushed and self.push_timer > 0:
-            self.x += int(self.push_velocity_x)
-            self.y += int(self.push_velocity_y)
+            self.x += self.push_velocity_x
+            self.y += self.push_velocity_y
             self.push_timer -= 1
             if self.push_timer <= 0:
                 self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
-            self.x += int(self.pull_velocity_x)
-            self.y += int(self.pull_velocity_y)
+            self.x += self.pull_velocity_x
+            self.y += self.pull_velocity_y
             self.pull_timer -= 1
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target
+            # Normal movement: steer toward player with capped acceleration
             dx = target_x - self.x
             dy = target_y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                self.x += int(dx/dist * speed)
-                self.y += int(dy/dist * speed)
+                desired_speed = speed
+                arrive_radius = 120
+                if dist < arrive_radius:
+                    desired_speed = max(1.0, speed * (dist / arrive_radius))
+                target_vx = (dx / dist) * desired_speed
+                target_vy = (dy / dist) * desired_speed
+                ax = (target_vx - self.vx)
+                ay = (target_vy - self.vy)
+                max_accel = 0.5
+                acc_mag = math.hypot(ax, ay)
+                if acc_mag > max_accel:
+                    ax = (ax / acc_mag) * max_accel
+                    ay = (ay / acc_mag) * max_accel
+                self.vx += ax
+                self.vy += ay
+                # Separation
+                sep_force_x = 0.0
+                sep_force_y = 0.0
+                sep_radius = 36
+                sep_radius_sq = sep_radius * sep_radius
+                sep_strength = 0.55
+                for other in getattr(self, 'game', None).enemies if hasattr(self, 'game') else []:
+                    if other is self:
+                        continue
+                    ox, oy = other.get_position()
+                    ox += other.size // 2
+                    oy += other.size // 2
+                    sx = (self.x + self.size // 2) - ox
+                    sy = (self.y + self.size // 2) - oy
+                    dsq = sx * sx + sy * sy
+                    if 0 < dsq < sep_radius_sq:
+                        d = math.sqrt(dsq)
+                        sep_force_x += (sx / d) * (sep_strength * (1 - d / sep_radius))
+                        sep_force_y += (sy / d) * (sep_strength * (1 - d / sep_radius))
+                self.vx += sep_force_x
+                self.vy += sep_force_y
+                spd = math.hypot(self.vx, self.vy)
+                if spd > 0:
+                    self.vx = (self.vx / spd) * desired_speed
+                    self.vy = (self.vy / spd) * desired_speed
+                self.x += self.vx
+                self.y += self.vy
         
         # Update triangle points
         self.points = [
@@ -583,6 +695,8 @@ class PentagonEnemy(BaseEntity):
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.vx: float = 0.0
+        self.vy: float = 0.0
         self.sides: int = 5  # Pentagon = 5 sides
         self.health: int = 5  # Takes 5 hits to kill (sides = strength)
         self.being_pulled: bool = False  # Whether currently pulled by black hole
@@ -609,29 +723,69 @@ class PentagonEnemy(BaseEntity):
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
-        """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
-            self.x += int(self.push_velocity_x)
-            self.y += int(self.push_velocity_y)
+            self.x += self.push_velocity_x
+            self.y += self.push_velocity_y
             self.push_timer -= 1
             if self.push_timer <= 0:
                 self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
-            self.x += int(self.pull_velocity_x)
-            self.y += int(self.pull_velocity_y)
+            self.x += self.pull_velocity_x
+            self.y += self.pull_velocity_y
             self.pull_timer -= 1
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target
+            # Normal movement: steer toward player with capped acceleration
             dx = target_x - self.x
             dy = target_y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                self.x += int(dx/dist * speed)
-                self.y += int(dy/dist * speed)
+                desired_speed = speed
+                arrive_radius = 140
+                if dist < arrive_radius:
+                    desired_speed = max(0.8, speed * (dist / arrive_radius))
+                target_vx = (dx / dist) * desired_speed
+                target_vy = (dy / dist) * desired_speed
+                ax = (target_vx - self.vx)
+                ay = (target_vy - self.vy)
+                max_accel = 0.4
+                acc_mag = math.hypot(ax, ay)
+                if acc_mag > max_accel:
+                    ax = (ax / acc_mag) * max_accel
+                    ay = (ay / acc_mag) * max_accel
+                self.vx += ax
+                self.vy += ay
+                # Separation
+                sep_force_x = 0.0
+                sep_force_y = 0.0
+                sep_radius = 44
+                sep_radius_sq = sep_radius * sep_radius
+                sep_strength = 0.5
+                for other in getattr(self, 'game', None).enemies if hasattr(self, 'game') else []:
+                    if other is self:
+                        continue
+                    ox, oy = other.get_position()
+                    ox += other.size // 2
+                    oy += other.size // 2
+                    sx = (self.x + self.size // 2) - ox
+                    sy = (self.y + self.size // 2) - oy
+                    dsq = sx * sx + sy * sy
+                    if 0 < dsq < sep_radius_sq:
+                        d = math.sqrt(dsq)
+                        sep_force_x += (sx / d) * (sep_strength * (1 - d / sep_radius))
+                        sep_force_y += (sy / d) * (sep_strength * (1 - d / sep_radius))
+                self.vx += sep_force_x
+                self.vy += sep_force_y
+                spd = math.hypot(self.vx, self.vy)
+                if spd > 0:
+                    self.vx = (self.vx / spd) * desired_speed
+                    self.vy = (self.vy / spd) * desired_speed
+                self.x += self.vx
+                self.y += self.vy
         
         # Update pentagon points
         self.points = self._calculate_pentagon_points(self.x, self.y, self.size)
@@ -668,6 +822,8 @@ class HexagonEnemy(BaseEntity):
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.vx: float = 0.0
+        self.vy: float = 0.0
         self.sides: int = 6  # Hexagon = 6 sides
         self.health: int = 6  # Takes 6 hits to kill (sides = strength)
         self.being_pulled: bool = False  # Whether currently pulled by black hole
@@ -695,29 +851,69 @@ class HexagonEnemy(BaseEntity):
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 5) -> None:
-        """Move enemy towards (target_x, target_y) by 'speed' pixels."""
+        """Move enemy towards (target_x, target_y) with capped acceleration, damping, separation, and arrival."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
-            self.x += int(self.push_velocity_x)
-            self.y += int(self.push_velocity_y)
+            self.x += self.push_velocity_x
+            self.y += self.push_velocity_y
             self.push_timer -= 1
             if self.push_timer <= 0:
                 self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
-            self.x += int(self.pull_velocity_x)
-            self.y += int(self.pull_velocity_y)
+            self.x += self.pull_velocity_x
+            self.y += self.pull_velocity_y
             self.pull_timer -= 1
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target
+            # Normal movement: steer toward player with capped acceleration
             dx = target_x - self.x
             dy = target_y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                self.x += int(dx/dist * speed)
-                self.y += int(dy/dist * speed)
+                desired_speed = speed
+                arrive_radius = 120
+                if dist < arrive_radius:
+                    desired_speed = max(1.0, speed * (dist / arrive_radius))
+                target_vx = (dx / dist) * desired_speed
+                target_vy = (dy / dist) * desired_speed
+                ax = (target_vx - self.vx)
+                ay = (target_vy - self.vy)
+                max_accel = 0.45
+                acc_mag = math.hypot(ax, ay)
+                if acc_mag > max_accel:
+                    ax = (ax / acc_mag) * max_accel
+                    ay = (ay / acc_mag) * max_accel
+                self.vx += ax
+                self.vy += ay
+                # Separation
+                sep_force_x = 0.0
+                sep_force_y = 0.0
+                sep_radius = 40
+                sep_radius_sq = sep_radius * sep_radius
+                sep_strength = 0.6
+                for other in getattr(self, 'game', None).enemies if hasattr(self, 'game') else []:
+                    if other is self:
+                        continue
+                    ox, oy = other.get_position()
+                    ox += other.size // 2
+                    oy += other.size // 2
+                    sx = (self.x + self.size // 2) - ox
+                    sy = (self.y + self.size // 2) - oy
+                    dsq = sx * sx + sy * sy
+                    if 0 < dsq < sep_radius_sq:
+                        d = math.sqrt(dsq)
+                        sep_force_x += (sx / d) * (sep_strength * (1 - d / sep_radius))
+                        sep_force_y += (sy / d) * (sep_strength * (1 - d / sep_radius))
+                self.vx += sep_force_x
+                self.vy += sep_force_y
+                spd = math.hypot(self.vx, self.vy)
+                if spd > 0:
+                    self.vx = (self.vx / spd) * desired_speed
+                    self.vy = (self.vy / spd) * desired_speed
+                self.x += self.vx
+                self.y += self.vy
         
         # Update hexagon points
         self.points = self._calculate_hexagon_points(self.x, self.y, self.size)
@@ -754,6 +950,8 @@ class BossEnemy(BaseEntity):
         self.size: int = size
         self.x: float = x
         self.y: float = y
+        self.vx: float = 0.0
+        self.vy: float = 0.0
         self.sides: int = 8  # Octagon = 8 sides
         self.health: int = 100  # Boss takes 100 hits to kill
         self.max_health: int = 100  # Track original health for phase detection
@@ -785,29 +983,41 @@ class BossEnemy(BaseEntity):
         return points
     
     def move_towards(self, target_x: float, target_y: float, speed: int = 3) -> None:
-        """Move boss towards (target_x, target_y) by 'speed' pixels. Boss moves slower."""
+        """Move boss towards (target_x, target_y) by 'speed' pixels with smooth steering."""
         # Apply push force if being pushed by shield
         if self.being_pushed and self.push_timer > 0:
-            self.x += int(self.push_velocity_x)
-            self.y += int(self.push_velocity_y)
+            self.x += self.push_velocity_x
+            self.y += self.push_velocity_y
             self.push_timer -= 1
             if self.push_timer <= 0:
                 self.being_pushed = False
         # Apply pull force if being pulled by black hole
         elif self.being_pulled and self.pull_timer > 0:
-            self.x += int(self.pull_velocity_x)
-            self.y += int(self.pull_velocity_y)
+            self.x += self.pull_velocity_x
+            self.y += self.pull_velocity_y
             self.pull_timer -= 1
             if self.pull_timer <= 0:
                 self.being_pulled = False
         else:
-            # Normal movement toward target (slower than regular enemies)
+            # Normal movement toward target with velocity blending (slower)
             dx = target_x - self.x
             dy = target_y - self.y
             dist = math.hypot(dx, dy)
             if dist > 0:
-                self.x += int(dx/dist * speed)
-                self.y += int(dy/dist * speed)
+                target_vx = (dx / dist) * speed
+                target_vy = (dy / dist) * speed
+                steer = 0.18
+                self.vx += (target_vx - self.vx) * steer
+                self.vy += (target_vy - self.vy) * steer
+                wobble = 0.03
+                self.vx += (random.random() - 0.5) * wobble
+                self.vy += (random.random() - 0.5) * wobble
+                spd = math.hypot(self.vx, self.vy)
+                if spd > speed:
+                    self.vx = (self.vx / spd) * speed
+                    self.vy = (self.vy / spd) * speed
+                self.x += self.vx
+                self.y += self.vy
         
         # Update octagon points
         self.points = self._calculate_octagon_points(self.x, self.y, self.size)
@@ -883,7 +1093,14 @@ class Particle(BaseEntity):
         # Fade out effect by changing color
         fade = int(255 * (self.life / self.max_life))
         self.canvas.itemconfig(self.rect, fill=f'#{fade:02x}{min(fade//2, 100):02x}00')
-        self.canvas.coords(self.rect, self.x-2, self.y-2, self.x+2, self.y+2)
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        self.canvas.coords(self.rect,
+                   off_x + (self.x - 2) * scale,
+                   off_y + (self.y - 2) * scale,
+                   off_x + (self.x + 2) * scale,
+                   off_y + (self.y + 2) * scale)
         return self.life > 0
 
     def reset(self, x: float, y: float, vx: float, vy: float, life: int) -> None:
@@ -895,7 +1112,14 @@ class Particle(BaseEntity):
         self.life = life
         self.max_life = life
         # Show the particle again (it may be hidden)
-        self.canvas.coords(self.rect, x-2, y-2, x+2, y+2)
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        self.canvas.coords(self.rect,
+                   off_x + (x - 2) * scale,
+                   off_y + (y - 2) * scale,
+                   off_x + (x + 2) * scale,
+                   off_y + (y + 2) * scale)
         self.canvas.itemconfig(self.rect, fill='orange', state='normal')
     
     def cleanup(self) -> None:
@@ -939,7 +1163,14 @@ class Shard(BaseEntity):
         self.vx *= 0.98
         self.vy *= 0.98
         
-        self.canvas.coords(self.rect, self.x-2, self.y-2, self.x+2, self.y+2)
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        self.canvas.coords(self.rect,
+                   off_x + (self.x - 2) * scale,
+                   off_y + (self.y - 2) * scale,
+                   off_x + (self.x + 2) * scale,
+                   off_y + (self.y + 2) * scale)
         
         # Check for enemy collision
         for enemy in self.game.enemies[:]:  # Use slice to avoid modification during iteration
@@ -1075,7 +1306,15 @@ class Projectile(BaseEntity):
         self.y += self.vy
         self.distance_traveled += movement_dist
         
-        self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
+        # Render-time scaling
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        self.canvas.coords(self.rect,
+                   off_x + (self.x - 4) * scale,
+                   off_y + (self.y - 4) * scale,
+                   off_x + (self.x + 4) * scale,
+                   off_y + (self.y + 4) * scale)
         
         # Check for enemy collision - use squared distances to avoid sqrt
         closest_enemy = None
@@ -1297,10 +1536,13 @@ class Projectile(BaseEntity):
         tx, ty = target_enemy.get_position()
         tx_center = tx + ENEMY_SIZE // 2
         ty_center = ty + ENEMY_SIZE // 2
-        
-        # Draw lightning line (magenta for mini-forks)
+        # Draw lightning line (magenta for mini-forks) with transform
+        scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
+        off_x = self.game.offset_x
+        off_y = self.game.offset_y
         line_id = self.game.canvas.create_line(
-            self.x, self.y, tx_center, ty_center,
+            off_x + self.x * scale, off_y + self.y * scale,
+            off_x + tx_center * scale, off_y + ty_center * scale,
             fill='magenta', width=1.5
         )
         
@@ -1355,10 +1597,13 @@ class Projectile(BaseEntity):
             ftx_center = ftx + ENEMY_SIZE_HALF
             fty_center = fty + ENEMY_SIZE_HALF
             
-            # Draw fork lightning line (white/bright color for forks)
+            # Draw fork lightning line (white/bright color for forks) with transform
+            scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
+            off_x = self.game.offset_x
+            off_y = self.game.offset_y
             fork_line_id = self.game.canvas.create_line(
-                tx_center, ty_center,
-                ftx_center, fty_center,
+                off_x + tx_center * scale, off_y + ty_center * scale,
+                off_x + ftx_center * scale, off_y + fty_center * scale,
                 fill='white', width=2
             )
             
@@ -1729,7 +1974,15 @@ class MinionProjectile(BaseEntity):
         # Update position
         self.x += self.vx
         self.y += self.vy
-        self.canvas.coords(self.rect, self.x - 3, self.y - 3, self.x + 3, self.y + 3)
+        # Render-time scaling
+        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+        self.canvas.coords(self.rect,
+                   off_x + (self.x - 3) * scale,
+                   off_y + (self.y - 3) * scale,
+                   off_x + (self.x + 3) * scale,
+                   off_y + (self.y + 3) * scale)
         
         # Check bounds - despawn if off screen
         if (self.x < -50 or self.x > self.game.window_width + 50 or

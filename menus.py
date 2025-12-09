@@ -39,6 +39,245 @@ class MenuManager:
         self.dev_buttons: Dict[str, int] = {}
         self.dev_submenu_active: bool = False  # Track if a submenu is showing
 
+        # Main menu state
+        self.main_menu_active: bool = False
+        self.main_menu_elements: List[int] = []
+        self.main_buttons: Dict[str, int] = {}
+
+    def show_main_menu(self) -> None:
+        """Display the main menu with Play, Settings, Credits, Quit."""
+        self.main_menu_active = True
+        self.game.set_state(GameState.MAIN_MENU)
+        self.canvas.delete('all')
+        self.game._draw_starfield()
+        # Galaxy background for title screen
+        try:
+            self.game._init_galaxy()
+        except Exception:
+            pass
+
+        # Use game-tracked window dimensions; fall back to canvas if valid
+        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
+        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
+        if canvas_width <= 1:
+            canvas_width = int(self.canvas.winfo_width())
+        if canvas_height <= 1:
+            canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.25)
+        menu_height = 360
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+
+        # Background panel
+        panel_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + menu_width, overlay_y + menu_height,
+            fill='', outline='', width=0
+        )
+        self.main_menu_elements.append(panel_id)
+
+        # Title
+        title_id = self.canvas.create_text(
+            overlay_x + menu_width // 2, overlay_y + 60,
+            text='SHAPE GAME', fill='cyan', font=('Arial', 42, 'bold')
+        )
+        self.main_menu_elements.append(title_id)
+
+        # Buttons config
+        buttons = [
+            ('Play', 'play', 'green'),
+            ('Settings', 'settings', '#4a4a7a'),
+            ('Credits', 'credits', '#7a4a4a'),
+            ('Quit', 'quit', 'red'),
+        ]
+        button_width = menu_width - 60
+        button_height = 48
+        spacing = 12
+        start_y = overlay_y + 120
+
+        for i, (label, action, color) in enumerate(buttons):
+            y = start_y + i * (button_height + spacing)
+            btn_id = self.canvas.create_rectangle(
+                overlay_x + 30, y,
+                overlay_x + 30 + button_width, y + button_height,
+                fill=color, outline='white', width=2
+            )
+            self.main_buttons[action] = btn_id
+            self.main_menu_elements.append(btn_id)
+            txt_id = self.canvas.create_text(
+                overlay_x + menu_width // 2, y + button_height // 2,
+                text=label, fill='white', font=('Arial', 18)
+            )
+            self.main_menu_elements.append(txt_id)
+
+    def handle_main_menu_click(self, event: tk.Event) -> None:
+        """Handle clicks in the main menu."""
+        if not self.main_menu_active:
+            return
+        play_beep_async(300, 80, self.game)
+        for action, btn_id in self.main_buttons.items():
+            coords = self.canvas.coords(btn_id)
+            if coords and len(coords) >= 4:
+                x1, y1, x2, y2 = coords
+                if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                    if action == 'play':
+                        self.close_main_menu()
+                        self.game.start_game_from_menu()
+                    elif action == 'settings':
+                        self.show_settings_menu()
+                    elif action == 'credits':
+                        self.show_credits()
+                    elif action == 'quit':
+                        # On title screen, Quit should close the application
+                        self.quit_app()
+                    return
+
+    def close_main_menu(self) -> None:
+        """Close the main menu and clear elements."""
+        for element_id in self.main_menu_elements:
+            try:
+                self.canvas.delete(element_id)
+            except tk.TclError:
+                pass
+        self.main_menu_elements = []
+        self.main_buttons = {}
+        self.main_menu_active = False
+
+    def show_settings_menu(self) -> None:
+        """Show a simple settings panel (sound/music toggles)."""
+        # Clear existing main menu elements but keep active state
+        for element_id in self.main_menu_elements:
+            try:
+                self.canvas.delete(element_id)
+            except tk.TclError:
+                pass
+        self.main_menu_elements = []
+        self.main_buttons = {}
+
+        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
+        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
+        if canvas_width <= 1:
+            canvas_width = int(self.canvas.winfo_width())
+        if canvas_height <= 1:
+            canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.25)
+        menu_height = 300
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+
+        panel_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + menu_width, overlay_y + menu_height,
+            fill='#102010', outline='lime', width=3
+        )
+        self.main_menu_elements.append(panel_id)
+
+        title_id = self.canvas.create_text(
+            overlay_x + menu_width // 2, overlay_y + 40,
+            text='SETTINGS', fill='lime', font=('Arial', 28, 'bold')
+        )
+        self.main_menu_elements.append(title_id)
+
+        # Buttons: Sound toggle, Music toggle, Back
+        buttons = [
+            (f"Sound: {'ON' if self.game.sound_enabled else 'OFF'}", 'toggle_sound', '#4a4a7a'),
+            (f"Music: {'ON' if self.game.music_enabled else 'OFF'}", 'toggle_music', '#7a4a4a'),
+            ('Back', 'back', 'orange')
+        ]
+        button_width = menu_width - 60
+        button_height = 44
+        spacing = 10
+        start_y = overlay_y + 90
+        for i, (label, action, color) in enumerate(buttons):
+            y = start_y + i * (button_height + spacing)
+            btn_id = self.canvas.create_rectangle(
+                overlay_x + 30, y,
+                overlay_x + 30 + button_width, y + button_height,
+                fill=color, outline='white', width=2
+            )
+            self.main_buttons[action] = btn_id
+            self.main_menu_elements.append(btn_id)
+            txt_id = self.canvas.create_text(
+                overlay_x + menu_width // 2, y + button_height // 2,
+                text=label, fill='white', font=('Arial', 16)
+            )
+            self.main_menu_elements.append(txt_id)
+
+    def show_credits(self) -> None:
+        """Show a simple credits screen with Back."""
+        for element_id in self.main_menu_elements:
+            try:
+                self.canvas.delete(element_id)
+            except tk.TclError:
+                pass
+        self.main_menu_elements = []
+        self.main_buttons = {}
+
+        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
+        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
+        if canvas_width <= 1:
+            canvas_width = int(self.canvas.winfo_width())
+        if canvas_height <= 1:
+            canvas_height = int(self.canvas.winfo_height())
+        menu_width = int(canvas_width * 0.35)
+        menu_height = 280
+        overlay_x = (canvas_width - menu_width) // 2
+        overlay_y = (canvas_height - menu_height) // 2
+
+        panel_id = self.canvas.create_rectangle(
+            overlay_x, overlay_y,
+            overlay_x + menu_width, overlay_y + menu_height,
+            fill='#201010', outline='white', width=3
+        )
+        self.main_menu_elements.append(panel_id)
+
+        title_id = self.canvas.create_text(
+            overlay_x + menu_width // 2, overlay_y + 30,
+            text='CREDITS', fill='white', font=('Arial', 28, 'bold')
+        )
+        self.main_menu_elements.append(title_id)
+
+        body_id = self.canvas.create_text(
+            overlay_x + menu_width // 2, overlay_y + 120,
+            text='Shape Game\nDesign & Code: You\nAudio: System beeps\nEngine: Tkinter',
+            fill='white', font=('Arial', 14)
+        )
+        self.main_menu_elements.append(body_id)
+
+        # Back button
+        btn_id = self.canvas.create_rectangle(
+            overlay_x + 30, overlay_y + menu_height - 70,
+            overlay_x + menu_width - 30, overlay_y + menu_height - 26,
+            fill='orange', outline='white', width=2
+        )
+        self.main_buttons['back'] = btn_id
+        self.main_menu_elements.append(btn_id)
+        txt_id = self.canvas.create_text(
+            overlay_x + menu_width // 2, overlay_y + menu_height - 48,
+            text='Back', fill='white', font=('Arial', 16)
+        )
+        self.main_menu_elements.append(txt_id)
+
+    def handle_settings_or_credits_click(self, event: tk.Event) -> None:
+        """Handle clicks on settings/credits screens."""
+        if not self.main_menu_active:
+            return
+        play_beep_async(300, 80, self.game)
+        for action, btn_id in self.main_buttons.items():
+            coords = self.canvas.coords(btn_id)
+            if coords and len(coords) >= 4:
+                x1, y1, x2, y2 = coords
+                if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                    if action == 'back':
+                        self.show_main_menu()
+                    elif action == 'toggle_sound':
+                        self.toggle_sound()
+                        self.show_settings_menu()
+                    elif action == 'toggle_music':
+                        self.toggle_music()
+                        self.show_settings_menu()
+                    return
+
     def show_upgrade_menu(self) -> None:
         """Display upgrade selection menu with three random choices."""
         try:
@@ -162,7 +401,8 @@ class MenuManager:
         except Exception as e:
             print(f"Error in show_upgrade_menu: {e}")
             self.upgrade_menu_active = False
-            self.game.paused = False
+            # Resume gameplay if the upgrade menu failed to show
+            self.game.set_state(GameState.PLAYING)
 
     def on_upgrade_selection(self, upgrade_key: str) -> None:
         """Handle upgrade selection."""
@@ -173,7 +413,8 @@ class MenuManager:
         except Exception as e:
             # Ensure menu is closed even on error
             self.upgrade_menu_active = False
-            self.game.paused = False
+            # Resume gameplay on error
+            self.game.set_state(GameState.PLAYING)
 
     def close_upgrade_menu(self, resume_game: bool = True) -> None:
         """Close the upgrade menu.
@@ -403,9 +644,24 @@ class MenuManager:
             self.pause_menu_elements = []
 
     def quit_game(self) -> None:
-        """Close the game window and exit."""
+        """Reset game and return to the main menu instead of exiting."""
         stop_background_music()
-        self.game.root.destroy()
+        try:
+            self.game.return_to_main_menu()
+        except Exception as e:
+            print(f"[MENU] Failed to return to main menu: {e}")
+
+    def quit_app(self) -> None:
+        """Close the application window immediately (used by Title Screen Quit)."""
+        try:
+            stop_background_music()
+        except Exception:
+            pass
+        try:
+            # Destroy the Tk root window to exit cleanly
+            self.game.root.destroy()
+        except Exception as e:
+            print(f"[MENU] Failed to close app: {e}")
 
     def toggle_sound(self) -> None:
         """Toggle sound on/off and refresh pause menu to show new state."""
