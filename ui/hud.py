@@ -3,16 +3,17 @@ HUD: Heads-up display management for score, level, xp, timer, perf text.
 """
 import tkinter as tk
 from typing import Optional
+from ui import fonts
 
 class HUD:
     def __init__(self, canvas: tk.Canvas, window_width: int, window_height: int, version: str):
         self.canvas = canvas
-        self.version_text = self.canvas.create_text(10, window_height - 10, anchor='sw', fill='gray', font=('Arial', 10), text=f"v{version}")
-        self.score_text = self.canvas.create_text(window_width//2, 30, anchor='n', fill='yellow', font=('Arial', 24), text="0")
-        self.level_text = self.canvas.create_text(window_width//2, 70, anchor='n', fill='cyan', font=('Arial', 20), text="Level: 0")
-        self.xp_text = self.canvas.create_text(window_width//2, 100, anchor='n', fill='green', font=('Arial', 16), text="XP: 0/10")
-        self.game_level_text = self.canvas.create_text(window_width//2, 130, anchor='n', fill='orange', font=('Arial', 16), text="Game Level: 1")
-        self.timer_text = self.canvas.create_text(window_width - 80, 30, anchor='n', fill='white', font=('Arial', 16), text="Time: 0:00")
+        self.version_text = self.canvas.create_text(10, window_height - 10, anchor='sw', fill='gray', font=fonts.FONT_10, text=f"v{version}")
+        self.score_text = self.canvas.create_text(window_width//2, 30, anchor='n', fill='yellow', font=fonts.FONT_24, text="0")
+        self.level_text = self.canvas.create_text(window_width//2, 70, anchor='n', fill='cyan', font=fonts.FONT_20, text="Level: 0")
+        self.xp_text = self.canvas.create_text(window_width//2, 100, anchor='n', fill='green', font=fonts.FONT_16, text="XP: 0/10")
+        self.game_level_text = self.canvas.create_text(window_width//2, 130, anchor='n', fill='orange', font=fonts.FONT_16, text="Game Level: 1")
+        self.timer_text = self.canvas.create_text(window_width - 80, 30, anchor='n', fill='white', font=fonts.FONT_16, text="Time: 0:00")
         self.perf_text: Optional[int] = None
 
     def set_score(self, score: int):
@@ -33,7 +34,7 @@ class HUD:
     def setup_perf(self):
         if self.perf_text is None:
             self.perf_text = self.canvas.create_text(
-                10, 30, anchor='nw', fill='lime', font=('Courier', 10), text="FPS: 0"
+                10, 30, anchor='nw', fill='lime', font=fonts.MONO_10, text="FPS: 0"
             )
         return self.perf_text
 

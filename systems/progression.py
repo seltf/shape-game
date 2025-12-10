@@ -14,6 +14,7 @@ from constants import (
     BOSS_SIZE_HALF,
 )
 from entities import BossEnemy
+from ui import fonts
 
 
 class ProgressionSystem:
@@ -173,7 +174,7 @@ class ProgressionSystem:
             victory_text = self.game.canvas.create_text(
                 self.game.window_width // 2, self.game.window_height // 2,
                 text="BOSS DEFEATED!\nProceeding to next level...",
-                font=('Arial', 36, 'bold'), fill='gold', anchor='center'
+                font=fonts.FONT_36_BOLD, fill='gold', anchor='center'
             )
 
             def _continue():

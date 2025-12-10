@@ -11,6 +11,7 @@ from constants import (
     WEAPON_UPGRADES, LINKED_UPGRADES, GameState
 )
 from audio import stop_background_music, start_background_music, play_beep_async
+from ui import fonts
 
 
 class MenuManager:
@@ -79,7 +80,7 @@ class MenuManager:
         # Title
         title_id = self.canvas.create_text(
             overlay_x + menu_width // 2, overlay_y + 60,
-            text='SHAPE GAME', fill='cyan', font=('Arial', 42, 'bold')
+            text='SHAPE GAME', fill='cyan', font=fonts.FONT_42_BOLD
         )
         self.main_menu_elements.append(title_id)
 
@@ -106,7 +107,7 @@ class MenuManager:
             self.main_menu_elements.append(btn_id)
             txt_id = self.canvas.create_text(
                 overlay_x + menu_width // 2, y + button_height // 2,
-                text=label, fill='white', font=('Arial', 18)
+                text=label, fill='white', font=fonts.FONT_18
             )
             self.main_menu_elements.append(txt_id)
 
@@ -174,7 +175,7 @@ class MenuManager:
 
         title_id = self.canvas.create_text(
             overlay_x + menu_width // 2, overlay_y + 40,
-            text='SETTINGS', fill='lime', font=('Arial', 28, 'bold')
+            text='SETTINGS', fill='lime', font=fonts.FONT_28_BOLD
         )
         self.main_menu_elements.append(title_id)
 
@@ -199,7 +200,7 @@ class MenuManager:
             self.main_menu_elements.append(btn_id)
             txt_id = self.canvas.create_text(
                 overlay_x + menu_width // 2, y + button_height // 2,
-                text=label, fill='white', font=('Arial', 16)
+                text=label, fill='white', font=fonts.FONT_16
             )
             self.main_menu_elements.append(txt_id)
 
@@ -233,14 +234,14 @@ class MenuManager:
 
         title_id = self.canvas.create_text(
             overlay_x + menu_width // 2, overlay_y + 30,
-            text='CREDITS', fill='white', font=('Arial', 28, 'bold')
+            text='CREDITS', fill='white', font=fonts.FONT_28_BOLD
         )
         self.main_menu_elements.append(title_id)
 
         body_id = self.canvas.create_text(
             overlay_x + menu_width // 2, overlay_y + 120,
             text='Shape Game\nDesign & Code: You\nAudio: System beeps\nEngine: Tkinter',
-            fill='white', font=('Arial', 14)
+            fill='white', font=fonts.FONT_14
         )
         self.main_menu_elements.append(body_id)
 
@@ -254,7 +255,7 @@ class MenuManager:
         self.main_menu_elements.append(btn_id)
         txt_id = self.canvas.create_text(
             overlay_x + menu_width // 2, overlay_y + menu_height - 48,
-            text='Back', fill='white', font=('Arial', 16)
+            text='Back', fill='white', font=fonts.FONT_16
         )
         self.main_menu_elements.append(txt_id)
 
@@ -359,7 +360,7 @@ class MenuManager:
                 overlay_x + overlay_width // 2, overlay_y + title_height // 2,
                 text='CHOOSE AN UPGRADE',
                 fill='lime',
-                font=('Arial', 24, 'bold')
+                font=fonts.FONT_24_BOLD
             )
             self.upgrade_menu_elements.append(title)
             
@@ -391,7 +392,7 @@ class MenuManager:
                     overlay_x + overlay_width // 2, btn_y + button_height // 2,
                     text=upgrade_name,
                     fill='lime',
-                    font=('Arial', 16)
+                    font=fonts.FONT_16
                 )
                 self.upgrade_menu_elements.append(text_id)
             
@@ -480,7 +481,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 30,
             text='PAUSED',
             fill='yellow',
-            font=('Arial', 32, 'bold')
+            font=fonts.FONT_32_BOLD
         )
         self.pause_menu_elements.append(title)
         
@@ -489,7 +490,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 70,
             text='Active Upgrades:',
             fill='cyan',
-            font=('Arial', 14, 'bold')
+            font=fonts.FONT_14_BOLD
         )
         self.pause_menu_elements.append(upgrades_label)
         
@@ -517,7 +518,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 90,
             text=upgrades_text,
             fill='lime',
-            font=('Arial', 12)
+            font=fonts.FONT_12
         )
         self.pause_menu_elements.append(upgrades_display)
         
@@ -535,7 +536,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Resume',
             fill='white',
-            font=('Arial', 16)
+            font=fonts.FONT_16
         )
         self.pause_menu_elements.append(self.pause_buttons['resume'])
         self.pause_menu_elements.append(resume_text)
@@ -551,7 +552,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Restart',
             fill='white',
-            font=('Arial', 16)
+            font=fonts.FONT_16
         )
         self.pause_menu_elements.append(self.pause_buttons['restart'])
         self.pause_menu_elements.append(restart_text)
@@ -567,7 +568,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, button_y + button_height // 2,
             text='Quit',
             fill='white',
-            font=('Arial', 16)
+            font=fonts.FONT_16
         )
         self.pause_menu_elements.append(self.pause_buttons['quit'])
         self.pause_menu_elements.append(quit_text)
@@ -584,7 +585,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, button_y + button_height // 2,
             text=f'Sound: {sound_status}',
             fill='white',
-            font=('Arial', 16)
+            font=fonts.FONT_16
         )
         self.pause_menu_elements.append(self.pause_buttons['sound'])
         self.pause_menu_elements.append(sound_text)
@@ -601,7 +602,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, button_y + button_height // 2,
             text=f'Music: {music_status}',
             fill='white',
-            font=('Arial', 16)
+            font=fonts.FONT_16
         )
         self.pause_menu_elements.append(self.pause_buttons['music'])
         self.pause_menu_elements.append(music_text)
@@ -617,7 +618,7 @@ class MenuManager:
             overlay_x + overlay_width - 12, overlay_y + 10,
             text='DEV',
             fill='gray',
-            font=('Arial', 8)
+            font=fonts.FONT_8
         )
         self.pause_menu_elements.append(self.pause_buttons['dev'])
         self.pause_menu_elements.append(dev_text)
@@ -732,7 +733,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 20,
             text='DEV TESTING MENU',
             fill='magenta',
-            font=('Arial', 20, 'bold')
+            font=fonts.FONT_20_BOLD
         )
         self.dev_menu_elements.append(title)
         
@@ -761,7 +762,7 @@ class MenuManager:
                 overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
                 text=label,
                 fill='white',
-                font=('Arial', 12)
+                font=fonts.FONT_12
             )
             self.dev_menu_elements.append(text_id)
 
@@ -793,7 +794,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 20,
             text='SPAWN ENEMY',
             fill='cyan',
-            font=('Arial', 18, 'bold')
+            font=fonts.FONT_18_BOLD
         )
         self.dev_menu_elements.append(title)
         
@@ -833,7 +834,7 @@ class MenuManager:
                 overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
                 text=label,
                 fill='white',
-                font=('Arial', 12)
+                font=fonts.FONT_12
             )
             self.dev_menu_elements.append(text_id)
 
@@ -884,7 +885,7 @@ class MenuManager:
             overlay_x + overlay_width // 2, overlay_y + 20,
             text='DEV UPGRADES',
             fill='cyan',
-            font=('Arial', 18, 'bold')
+            font=fonts.FONT_18_BOLD
         )
         self.dev_menu_elements.append(title)
 
@@ -912,7 +913,7 @@ class MenuManager:
                 overlay_x + overlay_width // 2, btn_y1 + button_height // 2,
                 text=label,
                 fill='white',
-                font=('Arial', 12)
+                font=fonts.FONT_12
             )
             self.dev_menu_elements.append(text_id)
 

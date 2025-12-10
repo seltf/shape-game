@@ -12,6 +12,7 @@ from constants import GameState
 from audio import play_beep_async, play_beep_unthrottled, start_background_music, stop_background_music
 from entities import BlackHole, Player, Enemy, TriangleEnemy, PentagonEnemy, HexagonEnemy, BossEnemy, Particle, Shard, Projectile, Minion, MinionProjectile
 from menus import MenuManager
+from ui import fonts
 from systems.input import InputSystem
 from systems.progression import ProgressionSystem
 from systems.weapon import WeaponSystem
@@ -656,7 +657,7 @@ class Game:
                 self.boss_announcement_text = self.canvas.create_text(
                     self.window_width // 2, self.window_height // 2 - 100,
                     text="⚠️ BOSS FIGHT ⚠️",
-                    font=('Arial', 64, 'bold'), fill='red', anchor='center'
+                    font=fonts.FONT_64_BOLD, fill='red', anchor='center'
                 )
             
             # Remove announcement when timer expires
@@ -1862,7 +1863,7 @@ class Game:
             overlay_x + overlay_width // 2, overlay_y + 30,
             text='GAME OVER',
             fill='red',
-            font=('Arial', 48, 'bold')
+            font=fonts.FONT_48_BOLD
         )
         
         # Score text
@@ -1870,7 +1871,7 @@ class Game:
             overlay_x + overlay_width // 2, overlay_y + 80,
             text=f'Final Score: {self.score}',
             fill='yellow',
-            font=('Arial', 24)
+            font=fonts.FONT_24
         )
         
         # Time text
@@ -1879,7 +1880,7 @@ class Game:
             overlay_x + overlay_width // 2, overlay_y + 120,
             text=f'{time_str}',
             fill='cyan',
-            font=('Arial', 20)
+            font=fonts.FONT_20
         )
         
         # Restart button
@@ -1897,7 +1898,7 @@ class Game:
             overlay_x + overlay_width // 2, btn_y + 25,
             text='Restart',
             fill='white',
-            font=('Arial', 20, 'bold')
+            font=fonts.FONT_20_BOLD
         )
 
     def attack(self):
