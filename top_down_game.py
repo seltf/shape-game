@@ -768,7 +768,21 @@ class Game:
             enemy = BossEnemy(self.canvas, x, y, BOSS_SIZE)
         elif enemy_type == 'ranged':
             from entities import RangedEnemy
-            enemy = RangedEnemy(self.canvas, x, y, ENEMY_SIZE)
+            # Ranged enemies should spawn inside the arena at a random location
+            # a set distance away from the player (they don't chase the player).
+            px, py = self.player.get_center()
+            # Preferred spawn distance range from player (pixels)
+            min_dist = 150
+            max_dist = 300
+            angle = random.random() * 2 * math.pi
+            distance = min_dist + random.random() * (max_dist - min_dist)
+            spawn_x = int(px + math.cos(angle) * distance)
+            spawn_y = int(py + math.sin(angle) * distance)
+            # Respect enemy size when clamping inside the canvas
+            half = ENEMY_SIZE_HALF
+            spawn_x = max(half, min(self.window_width - half, spawn_x))
+            spawn_y = max(half, min(self.window_height - half, spawn_y))
+            enemy = RangedEnemy(self.canvas, spawn_x, spawn_y, ENEMY_SIZE)
         else:  # 'square' (4-sided, basic difficulty)
             enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
         
