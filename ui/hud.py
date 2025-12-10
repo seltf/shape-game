@@ -38,6 +38,38 @@ class HUD:
             )
         return self.perf_text
 
+    def rescale(self, game: Any) -> None:
+        """Reposition HUD elements based on current window dimensions (screen-space, not world-space)."""
+        try:
+            w = game.window_width
+            h = game.window_height
+            # version in bottom-left
+            try:
+                self.canvas.coords(self.version_text, 10, h - 10)
+            except Exception:
+                pass
+            # center-top items
+            try:
+                self.canvas.coords(self.score_text, w // 2, 30)
+                self.canvas.coords(self.level_text, w // 2, 70)
+                self.canvas.coords(self.xp_text, w // 2, 100)
+                self.canvas.coords(self.game_level_text, w // 2, 130)
+            except Exception:
+                pass
+            # timer on top-right
+            try:
+                self.canvas.coords(self.timer_text, w - 80, 30)
+            except Exception:
+                pass
+            # perf text (if exists) keep top-left
+            try:
+                if self.perf_text is not None:
+                    self.canvas.coords(self.perf_text, 10, 30)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def set_perf(self, text: str):
         if self.perf_text:
             self.canvas.itemconfig(self.perf_text, text=text)

@@ -62,14 +62,20 @@ class BlackHole:
         self.time_alive: int = 0  # Track lifetime in milliseconds
         self.detonation_phase: bool = False
         # Visual representation - only outline, apply display transform for scaling
-        scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
-        off_x = getattr(self.game, 'offset_x', 0.0)
-        off_y = getattr(self.game, 'offset_y', 0.0)
-        self.rect: int = self.canvas.create_oval(
-            off_x + (x - radius) * scale, off_y + (y - radius) * scale,
-            off_x + (x + radius) * scale, off_y + (y + radius) * scale,
-            fill='', outline='#6600ff', width=2
-        )
+        try:
+            s1x, s1y = self.game.world_to_screen(x - radius, y - radius)
+            s2x, s2y = self.game.world_to_screen(x + radius, y + radius)
+            self.rect: int = self.canvas.create_oval(s1x, s1y, s2x, s2y, fill='', outline='#6600ff', width=2)
+        except Exception:
+            # Fallback to manual scale math if game transform not available
+            scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+            off_x = getattr(self.game, 'offset_x', 0.0)
+            off_y = getattr(self.game, 'offset_y', 0.0)
+            self.rect: int = self.canvas.create_oval(
+                off_x + (x - radius) * scale, off_y + (y - radius) * scale,
+                off_x + (x + radius) * scale, off_y + (y + radius) * scale,
+                fill='', outline='#6600ff', width=2
+            )
         # Animated rings during pull phase
         self.active_rings: List[List[Any]] = []  # Track canvas IDs of active animated rings
         self.ring_spawn_counter: int = 0  # Counter to spawn rings at intervals
@@ -104,11 +110,16 @@ class BlackHole:
             scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
             off_x = getattr(self.game, 'offset_x', 0.0)
             off_y = getattr(self.game, 'offset_y', 0.0)
-            ring_id = self.canvas.create_oval(
-                off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
-                off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
-                outline='#6600ff', width=2
-            )
+            try:
+                r1x, r1y = self.game.world_to_screen(self.x - ring_size, self.y - ring_size)
+                r2x, r2y = self.game.world_to_screen(self.x + ring_size, self.y + ring_size)
+                ring_id = self.canvas.create_oval(r1x, r1y, r2x, r2y, outline='#6600ff', width=2)
+            except Exception:
+                ring_id = self.canvas.create_oval(
+                    off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
+                    off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
+                    outline='#6600ff', width=2
+                )
             
             def delete_ring(rid=ring_id):
                 try:
@@ -175,14 +186,19 @@ class BlackHole:
             else:
                 # Update ring size on canvas
                 try:
-                    scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
-                    off_x = getattr(self.game, 'offset_x', 0.0)
-                    off_y = getattr(self.game, 'offset_y', 0.0)
-                    self.canvas.coords(
-                        ring_id,
-                        off_x + (self.x - new_size) * scale, off_y + (self.y - new_size) * scale,
-                        off_x + (self.x + new_size) * scale, off_y + (self.y + new_size) * scale
-                    )
+                    try:
+                        r1x, r1y = self.game.world_to_screen(self.x - new_size, self.y - new_size)
+                        r2x, r2y = self.game.world_to_screen(self.x + new_size, self.y + new_size)
+                        self.canvas.coords(ring_id, r1x, r1y, r2x, r2y)
+                    except Exception:
+                        scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+                        off_x = getattr(self.game, 'offset_x', 0.0)
+                        off_y = getattr(self.game, 'offset_y', 0.0)
+                        self.canvas.coords(
+                            ring_id,
+                            off_x + (self.x - new_size) * scale, off_y + (self.y - new_size) * scale,
+                            off_x + (self.x + new_size) * scale, off_y + (self.y + new_size) * scale
+                        )
                     # Update the size tracking
                     ring_data[1] = new_size
                 except tk.TclError:
@@ -199,11 +215,16 @@ class BlackHole:
         scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
         off_x = getattr(self.game, 'offset_x', 0.0)
         off_y = getattr(self.game, 'offset_y', 0.0)
-        ring_id = self.canvas.create_oval(
-            off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
-            off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
-            outline='#6600ff', width=1.5
-        )
+        try:
+            r1x, r1y = self.game.world_to_screen(self.x - ring_size, self.y - ring_size)
+            r2x, r2y = self.game.world_to_screen(self.x + ring_size, self.y + ring_size)
+            ring_id = self.canvas.create_oval(r1x, r1y, r2x, r2y, outline='#6600ff', width=1.5)
+        except Exception:
+            ring_id = self.canvas.create_oval(
+                off_x + (self.x - ring_size) * scale, off_y + (self.y - ring_size) * scale,
+                off_x + (self.x + ring_size) * scale, off_y + (self.y + ring_size) * scale,
+                outline='#6600ff', width=1.5
+            )
         # Store ring data as [id, current_size, max_size]
         self.active_rings.append([ring_id, ring_size, ring_size])
     
@@ -308,8 +329,8 @@ class Player:
     Represents the player character in the game.
     Handles position, movement, and rendering.
     """
-    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int) -> None:
-        """Initialize player at (x, y) with given size."""
+    def __init__(self, canvas: tk.Canvas, x: float, y: float, size: int, game: Any = None) -> None:
+        """Initialize player at (x, y) with given size. Accept optional `game` to draw using world->screen."""
         self.canvas: tk.Canvas = canvas
         self.size: int = size
         self.x: float = x
@@ -323,15 +344,25 @@ class Player:
         self.shield_level: int = 0  # Current shield level (0-3)
         self.prev_x: float = x  # Previous frame position for interpolation
         self.prev_y: float = y
-        self.rect: int = self.canvas.create_oval(x-size//2, y-size//2, x+size//2, y+size//2, fill='blue')
+        # Store game reference if provided (useful for world->screen transform)
+        self.game = game
+        try:
+            if getattr(self, 'game', None) is not None:
+                sx, sy = self.game.world_to_screen(self.x, self.y)
+            else:
+                raise Exception('no game')
+        except Exception:
+            sx, sy = self.x, self.y
+
+        self.rect: int = self.canvas.create_oval(sx - size//2, sy - size//2, sx + size//2, sy + size//2, fill='blue')
 
     def move(self, accel_x: float, accel_y: float, speed_boost: float = 0, window_width: Optional[int] = None, window_height: Optional[int] = None) -> None:
         """Apply acceleration to player velocity and update position."""
         # Use provided window dimensions, fall back to constants if not provided
         if window_width is None:
-            window_width = WIDTH
+            window_width = ARENA_WIDTH
         if window_height is None:
-            window_height = HEIGHT
+            window_height = ARENA_HEIGHT
         
         # Apply acceleration
         self.vx += accel_x * PLAYER_ACCELERATION
@@ -364,26 +395,54 @@ class Player:
         """Interpolate and update rendered position based on interpolation factor (0.0 to 1.0)."""
         interp_x = self.prev_x + (self.x - self.prev_x) * interpolation_factor
         interp_y = self.prev_y + (self.y - self.prev_y) * interpolation_factor
-        # Apply display transform (scale + offsets) for render-time scaling
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        dx1 = off_x + (interp_x - self.size//2) * scale
-        dy1 = off_y + (interp_y - self.size//2) * scale
-        dx2 = off_x + (interp_x + self.size//2) * scale
-        dy2 = off_y + (interp_y + self.size//2) * scale
-        self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
-        
-        # Update shield rings if active
-        if self.shield_rings:
-            for i, ring in enumerate(self.shield_rings):
-                if ring is not None:
-                    shield_radius = self.size // 2 + 15 + (i * 12)
-                    rx1 = off_x + (interp_x - shield_radius) * scale
-                    ry1 = off_y + (interp_y - shield_radius) * scale
-                    rx2 = off_x + (interp_x + shield_radius) * scale
-                    ry2 = off_y + (interp_y + shield_radius) * scale
-                    self.canvas.coords(ring, rx1, ry1, rx2, ry2)
+        # Apply display transform (use Game.world_to_screen for correctness)
+        try:
+            sx, sy = self.game.world_to_screen(interp_x, interp_y)
+            dx1 = sx - (self.size // 2)
+            dy1 = sy - (self.size // 2)
+            dx2 = sx + (self.size // 2)
+            dy2 = sy + (self.size // 2)
+            self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
+
+            # Update shield rings if active using world_to_screen for consistency
+            if self.shield_rings:
+                for i, ring in enumerate(self.shield_rings):
+                    if ring is not None:
+                        shield_radius = self.size // 2 + 15 + (i * 12)
+                        try:
+                            r1x, r1y = self.game.world_to_screen(interp_x - shield_radius, interp_y - shield_radius)
+                            r2x, r2y = self.game.world_to_screen(interp_x + shield_radius, interp_y + shield_radius)
+                            self.canvas.coords(ring, r1x, r1y, r2x, r2y)
+                        except Exception:
+                            # If world_to_screen fails for some reason, fall back to manual scale math below
+                            raise
+        except Exception:
+            # Fallback path: manual scaling when game transform not available
+            scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
+            off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
+            off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
+            dx1 = off_x + (interp_x - self.size//2) * scale
+            dy1 = off_y + (interp_y - self.size//2) * scale
+            dx2 = off_x + (interp_x + self.size//2) * scale
+            dy2 = off_y + (interp_y + self.size//2) * scale
+            try:
+                self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
+            except Exception:
+                pass
+
+            # Update shield rings using manual math
+            if self.shield_rings:
+                for i, ring in enumerate(self.shield_rings):
+                    if ring is not None:
+                        shield_radius = self.size // 2 + 15 + (i * 12)
+                        rx1 = off_x + (interp_x - shield_radius) * scale
+                        ry1 = off_y + (interp_y - shield_radius) * scale
+                        rx2 = off_x + (interp_x + shield_radius) * scale
+                        ry2 = off_y + (interp_y + shield_radius) * scale
+                        try:
+                            self.canvas.coords(ring, rx1, ry1, rx2, ry2)
+                        except Exception:
+                            pass
 
     def activate_shield(self) -> None:
         """Activate the shield rings around the player based on shield level."""
@@ -553,7 +612,18 @@ class Enemy(BaseEntity):
                 self.x += self.vx
                 self.y += self.vy
         
-        self.canvas.coords(self.rect, self.x, self.y, self.x+self.size, self.y+self.size)
+        try:
+            if hasattr(self, 'game') and self.game is not None:
+                sx1, sy1 = self.game.world_to_screen(self.x, self.y)
+                sx2, sy2 = self.game.world_to_screen(self.x + self.size, self.y + self.size)
+                self.canvas.coords(self.rect, sx1, sy1, sx2, sy2)
+            else:
+                self.canvas.coords(self.rect, self.x, self.y, self.x + self.size, self.y + self.size)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect, self.x, self.y, self.x + self.size, self.y + self.size)
+            except Exception:
+                pass
 
     def get_position(self) -> Tuple[float, float]:
         """Return the top-left coordinates of the enemy rectangle."""
@@ -637,8 +707,16 @@ class RangedEnemy(Enemy):
             self.x + inset_x, self.y + half
         ]
         try:
-            self.canvas.coords(self.rect, *self.points)
-        except tk.TclError:
+            if hasattr(self, 'game') and self.game is not None:
+                screen_pts: List[float] = []
+                for i in range(0, len(self.points), 2):
+                    wx, wy = self.points[i], self.points[i+1]
+                    sx, sy = self.game.world_to_screen(wx, wy)
+                    screen_pts.extend([sx, sy])
+                self.canvas.coords(self.rect, *screen_pts)
+            else:
+                self.canvas.coords(self.rect, *self.points)
+        except Exception:
             pass
 
 
@@ -757,7 +835,18 @@ class TriangleEnemy(BaseEntity):
             self.x, self.y + self.size,     # bottom-left
             self.x + self.size, self.y + self.size  # bottom-right
         ]
-        self.canvas.coords(self.rect, *self.points)
+        try:
+            if hasattr(self, 'game') and self.game is not None:
+                screen_pts: List[float] = []
+                for i in range(0, len(self.points), 2):
+                    wx, wy = self.points[i], self.points[i+1]
+                    sx, sy = self.game.world_to_screen(wx, wy)
+                    screen_pts.extend([sx, sy])
+                self.canvas.coords(self.rect, *screen_pts)
+            else:
+                self.canvas.coords(self.rect, *self.points)
+        except Exception:
+            pass
 
     def get_position(self) -> Tuple[float, float]:
         """Return the center-ish coordinates of the enemy for collision."""
@@ -883,7 +972,18 @@ class PentagonEnemy(BaseEntity):
         
         # Update pentagon points
         self.points = self._calculate_pentagon_points(self.x, self.y, self.size)
-        self.canvas.coords(self.rect, *self.points)
+        try:
+            if hasattr(self, 'game') and self.game is not None:
+                screen_pts: List[float] = []
+                for i in range(0, len(self.points), 2):
+                    wx, wy = self.points[i], self.points[i+1]
+                    sx, sy = self.game.world_to_screen(wx, wy)
+                    screen_pts.extend([sx, sy])
+                self.canvas.coords(self.rect, *screen_pts)
+            else:
+                self.canvas.coords(self.rect, *self.points)
+        except Exception:
+            pass
     
     def get_position(self) -> Tuple[float, float]:
         """Return the center coordinates of the enemy for collision."""
@@ -1011,7 +1111,18 @@ class HexagonEnemy(BaseEntity):
         
         # Update hexagon points
         self.points = self._calculate_hexagon_points(self.x, self.y, self.size)
-        self.canvas.coords(self.rect, *self.points)
+        try:
+            if hasattr(self, 'game') and self.game is not None:
+                screen_pts: List[float] = []
+                for i in range(0, len(self.points), 2):
+                    wx, wy = self.points[i], self.points[i+1]
+                    sx, sy = self.game.world_to_screen(wx, wy)
+                    screen_pts.extend([sx, sy])
+                self.canvas.coords(self.rect, *screen_pts)
+            else:
+                self.canvas.coords(self.rect, *self.points)
+        except Exception:
+            pass
     
     def get_position(self) -> Tuple[float, float]:
         """Return the center coordinates of the enemy for collision."""
@@ -1117,9 +1228,9 @@ class BossEnemy(Enemy):
                     win_w = gw.window_width
                     win_h = gw.window_height
                 else:
-                    # Fallback to constants if game not attached
+                    # Fallback to logical arena constants if game not attached
                     try:
-                        from constants import WIDTH as win_w, HEIGHT as win_h
+                        from constants import ARENA_WIDTH as win_w, ARENA_HEIGHT as win_h
                     except Exception:
                         win_w, win_h = 800, 600
                 margin = int(self.size * 1.5)
@@ -1150,7 +1261,18 @@ class BossEnemy(Enemy):
         
         # Update octagon points
         self.points = self._calculate_octagon_points(self.x, self.y, self.size)
-        self.canvas.coords(self.rect, *self.points)
+        try:
+            if hasattr(self, 'game') and self.game is not None:
+                screen_pts: List[float] = []
+                for i in range(0, len(self.points), 2):
+                    wx, wy = self.points[i], self.points[i+1]
+                    sx, sy = self.game.world_to_screen(wx, wy)
+                    screen_pts.extend([sx, sy])
+                self.canvas.coords(self.rect, *screen_pts)
+            else:
+                self.canvas.coords(self.rect, *self.points)
+        except Exception:
+            pass
     
     def get_position(self) -> Tuple[float, float]:
         """Return the center coordinates of the boss for collision."""
@@ -1222,14 +1344,15 @@ class Particle(BaseEntity):
         # Fade out effect by changing color
         fade = int(255 * (self.life / self.max_life))
         self.canvas.itemconfig(self.rect, fill=f'#{fade:02x}{min(fade//2, 100):02x}00')
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        self.canvas.coords(self.rect,
-                   off_x + (self.x - 2) * scale,
-                   off_y + (self.y - 2) * scale,
-                   off_x + (self.x + 2) * scale,
-                   off_y + (self.y + 2) * scale)
+        try:
+            sx1, sy1 = self.game.world_to_screen(self.x - 2, self.y - 2)
+            sx2, sy2 = self.game.world_to_screen(self.x + 2, self.y + 2)
+            self.canvas.coords(self.rect, sx1, sy1, sx2, sy2)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect, self.x - 2, self.y - 2, self.x + 2, self.y + 2)
+            except Exception:
+                pass
         return self.life > 0
 
     def reset(self, x: float, y: float, vx: float, vy: float, life: int) -> None:
@@ -1241,14 +1364,15 @@ class Particle(BaseEntity):
         self.life = life
         self.max_life = life
         # Show the particle again (it may be hidden)
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        self.canvas.coords(self.rect,
-                   off_x + (x - 2) * scale,
-                   off_y + (y - 2) * scale,
-                   off_x + (x + 2) * scale,
-                   off_y + (y + 2) * scale)
+        try:
+            sx1, sy1 = self.game.world_to_screen(x - 2, y - 2)
+            sx2, sy2 = self.game.world_to_screen(x + 2, y + 2)
+            self.canvas.coords(self.rect, sx1, sy1, sx2, sy2)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect, x - 2, y - 2, x + 2, y + 2)
+            except Exception:
+                pass
         self.canvas.itemconfig(self.rect, fill='orange', state='normal')
     
     def cleanup(self) -> None:
@@ -1292,14 +1416,15 @@ class Shard(BaseEntity):
         self.vx *= 0.98
         self.vy *= 0.98
         
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        self.canvas.coords(self.rect,
-                   off_x + (self.x - 2) * scale,
-                   off_y + (self.y - 2) * scale,
-                   off_x + (self.x + 2) * scale,
-                   off_y + (self.y + 2) * scale)
+        try:
+            sx1, sy1 = self.game.world_to_screen(self.x - 2, self.y - 2)
+            sx2, sy2 = self.game.world_to_screen(self.x + 2, self.y + 2)
+            self.canvas.coords(self.rect, sx1, sy1, sx2, sy2)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect, self.x - 2, self.y - 2, self.x + 2, self.y + 2)
+            except Exception:
+                pass
         
         # Check for enemy collision
         for enemy in self.game.enemies[:]:  # Use slice to avoid modification during iteration
@@ -1357,7 +1482,12 @@ class Projectile(BaseEntity):
         self.y: float = y
         self.vx: float = vx
         self.vy: float = vy
-        self.rect: int = self.canvas.create_oval(x-4, y-4, x+4, y+4, fill='yellow')
+        # Create visual using world->screen transform so it remains consistent after resize
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+        except Exception:
+            sx, sy = self.x, self.y
+        self.rect: int = self.canvas.create_oval(sx-4, sy-4, sx+4, sy+4, fill='yellow')
         self.hit_enemies: Set[int] = set()  # Track enemies already hit
         self.bounces: int = 0
         # Get weapon stats from game's computed stats
@@ -1405,7 +1535,11 @@ class Projectile(BaseEntity):
             if dist > 0:
                 self.x += (dx / dist) * move_distance
                 self.y += (dy / dist) * move_distance
-            self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
+            try:
+                sx, sy = self.game.world_to_screen(self.x, self.y)
+                self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+            except Exception:
+                self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
             # Change color to cyan when returning
             self.canvas.itemconfig(self.rect, fill='cyan')
             return True
@@ -1437,15 +1571,15 @@ class Projectile(BaseEntity):
         self.y += self.vy
         self.distance_traveled += movement_dist
         
-        # Render-time scaling
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        self.canvas.coords(self.rect,
-                   off_x + (self.x - 4) * scale,
-                   off_y + (self.y - 4) * scale,
-                   off_x + (self.x + 4) * scale,
-                   off_y + (self.y + 4) * scale)
+        # Render-time: update using world->screen transform
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+            self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
+            except Exception:
+                pass
         
         # Check for enemy collision - account for variable enemy sizes and high-speed tunneling
         closest_enemy = None
@@ -1607,10 +1741,21 @@ class Projectile(BaseEntity):
                 self.returning = True  # Start returning if no more targets
                 return True
         
-        # Out of bounds - use canvas dimensions, not global WIDTH/HEIGHT
-        canvas_width = self.canvas.winfo_width()
-        canvas_height = self.canvas.winfo_height()
-        if self.x < 0 or self.x > canvas_width or self.y < 0 or self.y > canvas_height:
+        # Update visual position for non-returning projectile as well
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+            self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+        except Exception:
+            pass
+
+        # Out of bounds - use logical arena dimensions so behavior is independent of display scaling
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = self.canvas.winfo_width(), self.canvas.winfo_height()
+
+        if self.x < 0 or self.x > arena_w or self.y < 0 or self.y > arena_h:
             return False
         
         return True
@@ -1704,14 +1849,19 @@ class Projectile(BaseEntity):
         tx_center = tx + ENEMY_SIZE // 2
         ty_center = ty + ENEMY_SIZE // 2
         # Draw lightning line (magenta for mini-forks) with transform
-        scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
-        off_x = self.game.offset_x
-        off_y = self.game.offset_y
-        line_id = self.game.canvas.create_line(
-            off_x + self.x * scale, off_y + self.y * scale,
-            off_x + tx_center * scale, off_y + ty_center * scale,
-            fill='magenta', width=1.5
-        )
+        try:
+            s1x, s1y = self.game.world_to_screen(self.x, self.y)
+            s2x, s2y = self.game.world_to_screen(tx_center, ty_center)
+            line_id = self.game.canvas.create_line(s1x, s1y, s2x, s2y, fill='magenta', width=1.5)
+        except Exception:
+            scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
+            off_x = self.game.offset_x
+            off_y = self.game.offset_y
+            line_id = self.game.canvas.create_line(
+                off_x + self.x * scale, off_y + self.y * scale,
+                off_x + tx_center * scale, off_y + ty_center * scale,
+                fill='magenta', width=1.5
+            )
         
         # Delete the line after a short delay
         def delete_line():
@@ -1765,14 +1915,19 @@ class Projectile(BaseEntity):
             fty_center = fty + ENEMY_SIZE_HALF
             
             # Draw fork lightning line (white/bright color for forks) with transform
-            scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
-            off_x = self.game.offset_x
-            off_y = self.game.offset_y
-            fork_line_id = self.game.canvas.create_line(
-                off_x + tx_center * scale, off_y + ty_center * scale,
-                off_x + ftx_center * scale, off_y + fty_center * scale,
-                fill='white', width=2
-            )
+            try:
+                s1x, s1y = self.game.world_to_screen(tx_center, ty_center)
+                s2x, s2y = self.game.world_to_screen(ftx_center, fty_center)
+                fork_line_id = self.game.canvas.create_line(s1x, s1y, s2x, s2y, fill='white', width=2)
+            except Exception:
+                scale = self.game.display_scale if self.game.display_scale > 0 else 1.0
+                off_x = self.game.offset_x
+                off_y = self.game.offset_y
+                fork_line_id = self.game.canvas.create_line(
+                    off_x + tx_center * scale, off_y + ty_center * scale,
+                    off_x + ftx_center * scale, off_y + fty_center * scale,
+                    fill='white', width=2
+                )
             
             # Delete the fork line after a short delay
             def delete_fork_line():
@@ -1835,9 +1990,13 @@ class Minion(BaseEntity):
         self.patrol_radius: int = 60  # How far from player's last known position to patrol
         
         # Visual representation - green circle for minion
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+        except Exception:
+            sx, sy = self.x, self.y
         self.rect: int = self.canvas.create_oval(
-            x - self.size // 2, y - self.size // 2,
-            x + self.size // 2, y + self.size // 2,
+            sx - self.size // 2, sy - self.size // 2,
+            sx + self.size // 2, sy + self.size // 2,
             fill='lime'
         )
 
@@ -1999,25 +2158,44 @@ class Minion(BaseEntity):
         self.x += self.vx
         self.y += self.vy
         
-        # Clamp to screen bounds (with some margin)
+        # Clamp to logical arena bounds (with some margin)
         margin = 20
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = getattr(self.game, 'window_width', WIDTH), getattr(self.game, 'window_height', HEIGHT)
+
         if self.x < margin:
             self.x = margin
-        if self.x > self.game.window_width - margin:
-            self.x = self.game.window_width - margin
+        if self.x > arena_w - margin:
+            self.x = arena_w - margin
         if self.y < margin:
             self.y = margin
-        if self.y > self.game.window_height - margin:
-            self.y = self.game.window_height - margin
+        if self.y > arena_h - margin:
+            self.y = arena_h - margin
         
-        # Update canvas position
-        self.canvas.coords(
-            self.rect,
-            self.x - self.size // 2,
-            self.y - self.size // 2,
-            self.x + self.size // 2,
-            self.y + self.size // 2
-        )
+        # Update canvas position using world->screen transform
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+            self.canvas.coords(
+                self.rect,
+                sx - self.size // 2,
+                sy - self.size // 2,
+                sx + self.size // 2,
+                sy + self.size // 2
+            )
+        except Exception:
+            try:
+                self.canvas.coords(
+                    self.rect,
+                    self.x - self.size // 2,
+                    self.y - self.size // 2,
+                    self.x + self.size // 2,
+                    self.y + self.size // 2
+                )
+            except Exception:
+                pass
         
         # Check for enemies in attack range
         if self.attack_cooldown <= 0:
@@ -2086,10 +2264,16 @@ class Minion(BaseEntity):
             self.patrol_waypoint_x = player_x + math.cos(angle) * distance
             self.patrol_waypoint_y = player_y + math.sin(angle) * distance
             
-            # Clamp waypoint to screen bounds
+            # Clamp waypoint to logical arena bounds
             margin = 30
-            self.patrol_waypoint_x = max(margin, min(self.patrol_waypoint_x, self.game.window_width - margin))
-            self.patrol_waypoint_y = max(margin, min(self.patrol_waypoint_y, self.game.window_height - margin))
+            try:
+                from constants import ARENA_WIDTH, ARENA_HEIGHT
+                arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+            except Exception:
+                arena_w, arena_h = getattr(self.game, 'window_width', WIDTH), getattr(self.game, 'window_height', HEIGHT)
+
+            self.patrol_waypoint_x = max(margin, min(self.patrol_waypoint_x, arena_w - margin))
+            self.patrol_waypoint_y = max(margin, min(self.patrol_waypoint_y, arena_h - margin))
             
             # Reset timer with new random interval for individuality
             self.patrol_interval = random.randint(1500, 3500)  # Vary the patrol speed
@@ -2144,10 +2328,14 @@ class MinionProjectile(BaseEntity):
         self.max_lifetime: int = 3000  # 3 seconds before despawn
         self.collision_radius: int = 8
         
-        # Visual representation - small yellow projectile
+        # Visual representation - small yellow projectile (use world->screen transform)
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+        except Exception:
+            sx, sy = self.x, self.y
         self.rect: int = self.canvas.create_oval(
-            x - 3, y - 3,
-            x + 3, y + 3,
+            sx - 3, sy - 3,
+            sx + 3, sy + 3,
             fill='yellow'
         )
 
@@ -2163,19 +2351,31 @@ class MinionProjectile(BaseEntity):
         # Update position
         self.x += self.vx
         self.y += self.vy
-        # Render-time scaling
-        scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
-        off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
-        off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-        self.canvas.coords(self.rect,
-                   off_x + (self.x - 3) * scale,
-                   off_y + (self.y - 3) * scale,
-                   off_x + (self.x + 3) * scale,
-                   off_y + (self.y + 3) * scale)
+        # Render-time: update using world->screen transform
+        try:
+            sx, sy = self.game.world_to_screen(self.x, self.y)
+            self.canvas.coords(self.rect,
+                       sx - 3,
+                       sy - 3,
+                       sx + 3,
+                       sy + 3)
+        except Exception:
+            try:
+                self.canvas.coords(self.rect,
+                           self.x - 3, self.y - 3,
+                           self.x + 3, self.y + 3)
+            except Exception:
+                pass
         
-        # Check bounds - despawn if off screen
-        if (self.x < -50 or self.x > self.game.window_width + 50 or
-            self.y < -50 or self.y > self.game.window_height + 50):
+        # Check bounds - despawn if outside logical arena (with margin)
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = getattr(self.game, 'window_width', WIDTH), getattr(self.game, 'window_height', HEIGHT)
+
+        if (self.x < -50 or self.x > arena_w + 50 or
+            self.y < -50 or self.y > arena_h + 50):
             return False
         
         # Check for enemy collision

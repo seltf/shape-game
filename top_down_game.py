@@ -106,8 +106,9 @@ class Game:
         self.score = 0
         self.hud = HUD(self.canvas, self.window_width, self.window_height, VERSION)
         self.hud.set_score(self.score)
-        self.player = Player(self.canvas, self.window_width//2, self.window_height//2, PLAYER_SIZE)
-        self.player.game = self  # Give player reference to game instance for shield pushback
+        # Initialize player in logical arena center and pass game reference so Player can draw correctly
+        from constants import ARENA_WIDTH, ARENA_HEIGHT
+        self.player = Player(self.canvas, ARENA_WIDTH//2, ARENA_HEIGHT//2, PLAYER_SIZE, game=self)
         
         self.enemies = []
         self.particles = []
@@ -326,23 +327,34 @@ class Game:
 
     def _draw_starfield(self):
         """Draw a starfield background with randomly positioned stars."""
-        # Create a tag for starfield so we can keep it in background
-        num_stars = 150
+        # Remove any existing starfield items (use tag 'starfield')
+        try:
+            self.canvas.delete('starfield')
+        except Exception:
+            pass
+
+        # Number of stars scales with window area (bounded)
+        area = max(1, int(self.window_width) * int(self.window_height))
+        num_stars = min(300, max(80, int(area / 3000)))
+
         for _ in range(num_stars):
-            x = random.randint(0, self.window_width)
-            y = random.randint(0, self.window_height)
+            x = random.randint(0, max(0, int(self.window_width)))
+            y = random.randint(0, max(0, int(self.window_height)))
             size = random.randint(1, 3)  # Small stars
             brightness = random.randint(100, 255)
             color = f'#{brightness:02x}{brightness:02x}{brightness:02x}'  # White-ish
-            
-            # Create small circles for stars
+
+            # Create small circles for stars and tag them so we can remove/redraw later
             star = self.canvas.create_oval(
                 x - size//2, y - size//2,
                 x + size//2, y + size//2,
-                fill=color, outline=color
+                fill=color, outline=color, tags=('starfield',)
             )
             # Send to back so it doesn't interfere with game elements
-            self.canvas.tag_lower(star)
+            try:
+                self.canvas.tag_lower(star)
+            except Exception:
+                pass
 
     def _init_galaxy(self) -> None:
         """Initialize a simple galaxy simulation for the title screen background."""
@@ -449,12 +461,14 @@ class Game:
         """Animate galaxy particles by slowly rotating the spiral arms."""
         if not self.galaxy_particles:
             return
-        scale = getattr(self, 'display_scale', 1.0)
-        offx = getattr(self, 'offset_x', 0.0)
-        offy = getattr(self, 'offset_y', 0.0)
+        # Galaxy is a title-screen visual that should be positioned in screen space
+        # (centered on the current window). Compute positions relative to the current
+        # window center so resizing or display transforms do not shift it.
+        cx = float(self.window_width) / 2.0
+        cy = float(self.window_height) / 2.0
         for p in self.galaxy_particles:
             p['theta'] += p['speed']
-            # Elliptical spiral
+            # Elliptical spiral in particle-local coordinates
             px = (p['r'] * math.cos(p['theta'])) * p.get('ellipse_x', 1.0)
             py = (p['r'] * math.sin(p['theta'])) * p.get('ellipse_y', 1.0)
             # Apply tilt rotation around center using precomputed cos/sin
@@ -462,18 +476,18 @@ class Game:
             sin_t = p.get('tilt_sin', 0.0)
             rx = px * cos_t - py * sin_t
             ry = px * sin_t + py * cos_t
-            # Apply overall view rotation (90° left)
+            # Apply overall view rotation
             cos_v = p.get('view_cos', 1.0)
             sin_v = p.get('view_sin', 0.0)
             vx = rx * cos_v - ry * sin_v
             vy = rx * sin_v + ry * cos_v
-            x = p['cx'] + vx
-            y = p['cy'] + vy
-            dx = offx + x * scale
-            dy = offy + y * scale
-            s = p['size'] * max(1.0, scale)
+            # Position in screen-space centered on current window center
+            x = cx + vx
+            y = cy + vy
+            # Size should scale slightly with display_scale for crispness
+            s = p['size'] * max(1.0, getattr(self, 'display_scale', 1.0))
             try:
-                self.canvas.coords(p['item'], dx - s, dy - s, dx + s, dy + s)
+                self.canvas.coords(p['item'], x - s, y - s, x + s, y + s)
             except tk.TclError:
                 pass
 
@@ -515,8 +529,167 @@ class Game:
             # Track window dims
             self.window_width = new_w
             self.window_height = new_h
+            # Redraw background starfield to fill new canvas size
+            try:
+                self._draw_starfield()
+            except Exception:
+                pass
+
+            # Immediately rescale all existing canvas drawables to match new transform
+            try:
+                self._rescale_all_drawables()
+            except Exception as e:
+                print(f"[RESIZE] Failed to rescale drawables: {e}")
         except Exception as e:
             print(f"[RESIZE] Error handling resize: {e}")
+
+    def world_to_screen(self, x: float, y: float) -> Tuple[float, float]:
+        """Convert logical world (arena) coordinates to screen (canvas) coordinates using current display transform.
+
+        Returns (screen_x, screen_y).
+        """
+        scale = self.display_scale if getattr(self, 'display_scale', 1.0) > 0 else 1.0
+        off_x = getattr(self, 'offset_x', 0.0)
+        off_y = getattr(self, 'offset_y', 0.0)
+        return off_x + x * scale, off_y + y * scale
+
+    def screen_to_world(self, sx: float, sy: float) -> Tuple[float, float]:
+        """Convert screen (canvas) coordinates back to logical world coordinates.
+
+        Returns (world_x, world_y).
+        """
+        scale = self.display_scale if getattr(self, 'display_scale', 1.0) > 0 else 1.0
+        off_x = getattr(self, 'offset_x', 0.0)
+        off_y = getattr(self, 'offset_y', 0.0)
+        return (sx - off_x) / scale, (sy - off_y) / scale
+
+    def _rescale_all_drawables(self) -> None:
+        """Update canvas coords for all visible entities and HUD items using current world->screen transform.
+
+        This ensures items created using logical coordinates remain visually aligned after window resize.
+        """
+        # Rescale player
+        try:
+            if hasattr(self, 'player') and self.player is not None:
+                px, py = self.player.get_center()
+                sx, sy = self.world_to_screen(px, py)
+                half = self.player.size // 2
+                self.canvas.coords(self.player.rect, sx - half, sy - half, sx + half, sy + half)
+                # Shield rings
+                if getattr(self.player, 'shield_rings', None):
+                    for i, ring in enumerate(self.player.shield_rings):
+                        if ring is None:
+                            continue
+                        shield_radius = self.player.size // 2 + 15 + (i * 12)
+                        r1x, r1y = self.world_to_screen(px - shield_radius, py - shield_radius)
+                        r2x, r2y = self.world_to_screen(px + shield_radius, py + shield_radius)
+                        try:
+                            self.canvas.coords(ring, r1x, r1y, r2x, r2y)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        # Rescale enemies
+        for enemy in list(getattr(self, 'enemies', [])):
+            try:
+                ex, ey = enemy.get_position()
+                # If polygonal enemy with points, remap each point
+                if hasattr(enemy, 'points') and isinstance(getattr(enemy, 'points'), (list, tuple)):
+                    pts = enemy.points
+                    screen_pts = []
+                    for i in range(0, len(pts), 2):
+                        wx, wy = pts[i], pts[i+1]
+                        sx, sy = self.world_to_screen(wx, wy)
+                        screen_pts.extend([sx, sy])
+                    try:
+                        self.canvas.coords(enemy.rect, *screen_pts)
+                    except Exception:
+                        pass
+                else:
+                    # Rectangle-style enemy (top-left coords)
+                    half = enemy.size // 2 if hasattr(enemy, 'size') else 0
+                    # Some enemies store top-left; others center—try both defensively
+                    # Assume get_position returns top-left for most enemies
+                    sx1, sy1 = self.world_to_screen(ex, ey)
+                    sx2, sy2 = self.world_to_screen(ex + getattr(enemy, 'size', 0), ey + getattr(enemy, 'size', 0))
+                    try:
+                        self.canvas.coords(enemy.rect, sx1, sy1, sx2, sy2)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Rescale minions
+        for m in list(getattr(self, 'minions', [])):
+            try:
+                mx, my = m.get_position()
+                sx, sy = self.world_to_screen(mx, my)
+                half = m.size // 2
+                try:
+                    self.canvas.coords(m.rect, sx - half, sy - half, sx + half, sy + half)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        # Rescale projectiles (player & minion & enemy)
+        for proj_list in ('projectiles', 'minion_projectiles', 'enemy_projectiles'):
+            for p in list(getattr(self, proj_list, [])):
+                try:
+                    px = getattr(p, 'x', None)
+                    py = getattr(p, 'y', None)
+                    if px is None or py is None:
+                        continue
+                    sx, sy = self.world_to_screen(px, py)
+                    # Compute bounds based on visual size if available
+                    r = getattr(p, 'collision_radius', 4)
+                    try:
+                        self.canvas.coords(p.rect, sx - r, sy - r, sx + r, sy + r)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+
+        # Rescale black holes
+        for bh in list(getattr(self, 'black_holes', [])):
+            try:
+                bx, by = bh.x, bh.y
+                r = bh.radius
+                s1x, s1y = self.world_to_screen(bx - r, by - r)
+                s2x, s2y = self.world_to_screen(bx + r, by + r)
+                try:
+                    self.canvas.coords(bh.rect, s1x, s1y, s2x, s2y)
+                except Exception:
+                    pass
+                # Rescale rings
+                for ring_data in getattr(bh, 'active_rings', []):
+                    try:
+                        ring_id, cur_size, max_size = ring_data
+                        rs1x, rs1y = self.world_to_screen(bx - cur_size, by - cur_size)
+                        rs2x, rs2y = self.world_to_screen(bx + cur_size, by + cur_size)
+                        try:
+                            self.canvas.coords(ring_id, rs1x, rs1y, rs2x, rs2y)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        # Rescale HUD (screen-space UI)
+        try:
+            if hasattr(self, 'hud') and self.hud is not None and hasattr(self.hud, 'rescale'):
+                self.hud.rescale(self)
+        except Exception:
+            pass
+
+        # Rescale any active menus so overlays stay centered
+        try:
+            if hasattr(self, 'menu_manager') and self.menu_manager is not None and hasattr(self.menu_manager, 'rescale'):
+                self.menu_manager.rescale()
+        except Exception:
+            pass
 
     def compute_weapon_stats(self):
         """Compute effective weapon stats based on base stats and active upgrades."""
@@ -738,19 +911,24 @@ class Game:
         """Get a random spawn position outside screen bounds."""
         margin = 200
         side = random.choice(['top', 'bottom', 'left', 'right'])
-        
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = self.window_width, self.window_height
+
         if side == 'top':
-            x = random.randint(-ENEMY_SIZE, self.window_width)
+            x = random.randint(-ENEMY_SIZE, arena_w)
             y = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
         elif side == 'bottom':
-            x = random.randint(-ENEMY_SIZE, self.window_width)
-            y = random.randint(self.window_height, self.window_height + margin)
+            x = random.randint(-ENEMY_SIZE, arena_w)
+            y = random.randint(arena_h, arena_h + margin)
         elif side == 'left':
             x = random.randint(-margin - ENEMY_SIZE, -ENEMY_SIZE)
-            y = random.randint(-ENEMY_SIZE, self.window_height)
+            y = random.randint(-ENEMY_SIZE, arena_h)
         else:  # right
-            x = random.randint(self.window_width, self.window_width + margin)
-            y = random.randint(-ENEMY_SIZE, self.window_height)
+            x = random.randint(arena_w, arena_w + margin)
+            y = random.randint(-ENEMY_SIZE, arena_h)
         
         return x, y
     
@@ -778,10 +956,16 @@ class Game:
             distance = min_dist + random.random() * (max_dist - min_dist)
             spawn_x = int(px + math.cos(angle) * distance)
             spawn_y = int(py + math.sin(angle) * distance)
-            # Respect enemy size when clamping inside the canvas
+            # Respect enemy size when clamping inside the logical arena
             half = ENEMY_SIZE_HALF
-            spawn_x = max(half, min(self.window_width - half, spawn_x))
-            spawn_y = max(half, min(self.window_height - half, spawn_y))
+            try:
+                from constants import ARENA_WIDTH, ARENA_HEIGHT
+                arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+            except Exception:
+                arena_w, arena_h = self.window_width, self.window_height
+
+            spawn_x = max(half, min(arena_w - half, spawn_x))
+            spawn_y = max(half, min(arena_h - half, spawn_y))
             enemy = RangedEnemy(self.canvas, spawn_x, spawn_y, ENEMY_SIZE)
         else:  # 'square' (4-sided, basic difficulty)
             enemy = Enemy(self.canvas, x, y, ENEMY_SIZE)
@@ -798,13 +982,19 @@ class Game:
         spawn_x = px + int(math.cos(angle) * distance)
         spawn_y = py + int(math.sin(angle) * distance)
         
-        # Clamp to screen bounds (respect size of spawned enemy)
+        # Clamp to logical arena bounds (respect size of spawned enemy)
         if enemy_type == 'boss':
             from constants import BOSS_SIZE_HALF as half
         else:
             half = ENEMY_SIZE_HALF
-        spawn_x = max(half, min(self.window_width - half, spawn_x))
-        spawn_y = max(half, min(self.window_height - half, spawn_y))
+        try:
+            from constants import ARENA_WIDTH, ARENA_HEIGHT
+            arena_w, arena_h = ARENA_WIDTH, ARENA_HEIGHT
+        except Exception:
+            arena_w, arena_h = self.window_width, self.window_height
+
+        spawn_x = max(half, min(arena_w - half, spawn_x))
+        spawn_y = max(half, min(arena_h - half, spawn_y))
         
         self._spawn_enemy_by_type(spawn_x, spawn_y, enemy_type)
 
@@ -951,10 +1141,14 @@ class Game:
             self.canvas.delete('all')
             self._draw_starfield()
             
-            # Recreate player's canvas item (it was deleted by canvas.delete('all'))
+            # Recreate player's canvas item (it was deleted by canvas.delete('all')).
+            try:
+                sx, sy = self.world_to_screen(self.player.x, self.player.y)
+            except Exception:
+                sx, sy = self.player.x, self.player.y
             self.player.rect = self.canvas.create_oval(
-                self.player.x - self.player.size//2, self.player.y - self.player.size//2,
-                self.player.x + self.player.size//2, self.player.y + self.player.size//2,
+                sx - self.player.size//2, sy - self.player.size//2,
+                sx + self.player.size//2, sy + self.player.size//2,
                 fill='blue'
             )
             
@@ -1089,7 +1283,8 @@ class Game:
         self.xp = 0
         self.level = 0
         self.xp_for_next_level = 10
-        self.player = Player(self.canvas, WIDTH//2, HEIGHT//2, PLAYER_SIZE)
+        from constants import ARENA_WIDTH, ARENA_HEIGHT
+        self.player = Player(self.canvas, ARENA_WIDTH//2, ARENA_HEIGHT//2, PLAYER_SIZE, game=self)
         self.player.game = self  # Give player reference to game instance for shield pushback
         self.enemies = []
         self.start_game_level()

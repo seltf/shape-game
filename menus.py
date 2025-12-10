@@ -889,6 +889,72 @@ class MenuManager:
         )
         self.dev_menu_elements.append(title)
 
+    def rescale(self) -> None:
+        """Redraw the currently active menu to reposition elements after a window resize.
+
+        Simpler approach: close then re-open the active menu so layout is recalculated
+        using current canvas dimensions. This avoids complex per-item coord updates.
+        """
+        try:
+            # Main menu
+            if self.main_menu_active:
+                try:
+                    self.close_main_menu()
+                except Exception:
+                    pass
+                try:
+                    self.show_main_menu()
+                except Exception:
+                    pass
+                return
+
+            # Settings / Credits are part of main_menu_active flow; if main not active but
+            # we have main buttons cleared, just show main menu
+            # Upgrade menu
+            if self.upgrade_menu_active:
+                try:
+                    self.close_upgrade_menu(resume_game=False)
+                except Exception:
+                    pass
+                try:
+                    self.show_upgrade_menu()
+                except Exception:
+                    pass
+                return
+
+            # Pause menu
+            if self.pause_menu_elements:
+                try:
+                    self.hide_pause_menu()
+                except Exception:
+                    pass
+                try:
+                    self.show_pause_menu()
+                except Exception:
+                    pass
+                return
+
+            # Dev menu
+            if self.dev_menu_active:
+                try:
+                    # close dev menu by deleting elements
+                    for el in list(self.dev_menu_elements):
+                        try:
+                            self.canvas.delete(el)
+                        except Exception:
+                            pass
+                    self.dev_menu_elements = []
+                except Exception:
+                    pass
+                try:
+                    self.show_dev_menu()
+                except Exception:
+                    pass
+                return
+        except Exception:
+            # If anything goes wrong, don't raise during a resize
+            pass
+
         button_width = overlay_width - 40
         # Reuse computed button_height and spacing
         start_y = overlay_y + title_height + 8
