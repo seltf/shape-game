@@ -1948,13 +1948,33 @@ class Minion(BaseEntity):
             dist_to_target = math.hypot(dx_to_target, dy_to_target)
             
             if dist_to_target > 0:
-                # Move towards target
-                target_vx = (dx_to_target / dist_to_target) * self.max_speed
-                target_vy = (dy_to_target / dist_to_target) * self.max_speed
-                
-                # Smoothly blend velocity toward target
-                self.vx += (target_vx - self.vx) * 0.2
-                self.vy += (target_vy - self.vy) * 0.2
+                # Tactical spacing: prefer to keep a distance from the enemy while attacking.
+                # Desired distance is a fraction of attack_range (bounded) to avoid getting too close.
+                desired_distance = min(self.attack_range * 0.7, 100)
+                hysteresis = 8  # small dead zone to avoid jitter
+
+                if dist_to_target > desired_distance + hysteresis:
+                    # Too far -> approach the target
+                    desired_vx = (dx_to_target / dist_to_target) * self.max_speed
+                    desired_vy = (dy_to_target / dist_to_target) * self.max_speed
+                    blend = 0.22
+                elif dist_to_target < desired_distance - hysteresis:
+                    # Too close -> retreat (move away from target)
+                    desired_vx = -(dx_to_target / dist_to_target) * self.max_speed
+                    desired_vy = -(dy_to_target / dist_to_target) * self.max_speed
+                    blend = 0.28
+                else:
+                    # Within preferred band -> strafe around the target for dynamic behavior
+                    # Use a perpendicular vector to circle the enemy
+                    perp_x = -dy_to_target / dist_to_target
+                    perp_y = dx_to_target / dist_to_target
+                    desired_vx = perp_x * (self.max_speed * 0.6)
+                    desired_vy = perp_y * (self.max_speed * 0.6)
+                    blend = 0.18
+
+                # Smoothly blend velocity toward tactical desired velocity
+                self.vx += (desired_vx - self.vx) * blend
+                self.vy += (desired_vy - self.vy) * blend
         else:
             # No target: follow player if too far
             if dist_to_player > self.follow_distance:
