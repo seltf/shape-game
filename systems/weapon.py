@@ -117,6 +117,12 @@ class WeaponSystem:
             is_odd_bounce = (bounce_index % 2 == 0)
             if is_odd_bounce:
                 self._create_fork_from_target(proj, chain_target)
+        # Cleanup the temporary projectile used to orchestrate chain lightning so its
+        # visual oval doesn't remain on the canvas as a ghost.
+        try:
+            proj.cleanup()
+        except Exception:
+            pass
 
     def _create_fork_from_target(self, proj: Projectile, target_enemy: Any) -> None:
         """Create fork lightning from a target to the closest nearby unhit enemy and strike it."""
