@@ -5,17 +5,19 @@ This doc outlines level progression, waves, timers, and boss flow.
 ## Concepts
 - **Game Level**: Difficulty stage with predefined waves.
 - **Player Level**: XP-driven upgrades; independent from game level.
-- **Rest Timer**: Short pause between levels.
+-- **Rest Timer**: Short pause between levels (currently 2 seconds / 2000 ms).
 - **Boss**: Special enemy with unique health and rewards.
 
 ## Flow
 1. Level starts → spawn waves according to schedule.
 2. All waves completed → start rest timer.
 3. After rest → advance to next level.
+
+Note: Boss fights in the current implementation trigger at level 10 (see `systems/progression.py`).
 4. Boss levels: spawn boss and manage fight loop.
 
 ## Configuration
-- Defined in `constants.py` (e.g., `GAME_LEVEL_WAVES`, enemy counts, timings).
+-- Defined in `constants.py` (e.g., `GAME_LEVEL_WAVES`, enemy counts, timings). The rest period is `LEVEL_REST_DURATION` (2000 ms).
 - Linked upgrades (prerequisites) enforced in `Game.add_upgrade()`.
 - Base enemy speeds tuned in `top_down_game.py` to adjust difficulty (slower by default).
 

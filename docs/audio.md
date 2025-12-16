@@ -3,12 +3,11 @@
 Audio is optional and degrades gracefully if a backend is unavailable.
 
 ## Backends
+## Backends
 - Primary: `pygame.mixer` (recommended for cross-platform)
-- Fallback: platform-specific alternatives if present
+- Fallback: `winsound` on Windows (used when `pygame` is not available)
+- If no supported backend is available: audio is disabled and the game logs an informative message
 - If none available: audio disabled with informative logs
-
-## Effects
-- Short beep on clicks/selection and enemy kills (non-blocking)
 - Background music toggled via Settings; stopped on Game Over and during transitions.
 - Title Screen `Quit` stops music before exiting.
 
