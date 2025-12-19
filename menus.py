@@ -45,6 +45,20 @@ class MenuManager:
         self.main_menu_elements: List[int] = []
         self.main_buttons: Dict[str, int] = {}
 
+    def _get_display_rect(self) -> Tuple[int, int, int, int]:
+        """Return the visible game display rectangle (left, top, width, height)
+
+        Uses the game's `display_scale` and offsets so menus are laid out within
+        the 4:3 arena area and not stretched to the full canvas when letterboxing.
+        """
+        from constants import ARENA_WIDTH, ARENA_HEIGHT
+        scale = getattr(self.game, 'display_scale', 1.0)
+        off_x = int(getattr(self.game, 'offset_x', 0))
+        off_y = int(getattr(self.game, 'offset_y', 0))
+        w = int(ARENA_WIDTH * (scale if scale > 0 else 1.0))
+        h = int(ARENA_HEIGHT * (scale if scale > 0 else 1.0))
+        return off_x, off_y, w, h
+
     def show_main_menu(self) -> None:
         """Display the main menu with Play, Settings, Credits, Quit."""
         self.main_menu_active = True
@@ -57,17 +71,12 @@ class MenuManager:
         except Exception:
             pass
 
-        # Use game-tracked window dimensions; fall back to canvas if valid
-        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
-        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
-        if canvas_width <= 1:
-            canvas_width = int(self.canvas.winfo_width())
-        if canvas_height <= 1:
-            canvas_height = int(self.canvas.winfo_height())
-        menu_width = int(canvas_width * 0.25)
+        # Layout the menu inside the game's display area (maintains 4:3 ratio)
+        disp_x, disp_y, disp_w, disp_h = self._get_display_rect()
+        menu_width = int(disp_w * 0.25)
         menu_height = 360
-        overlay_x = (canvas_width - menu_width) // 2
-        overlay_y = (canvas_height - menu_height) // 2
+        overlay_x = disp_x + (disp_w - menu_width) // 2
+        overlay_y = disp_y + (disp_h - menu_height) // 2
 
         # Background panel
         panel_id = self.canvas.create_rectangle(
@@ -155,16 +164,11 @@ class MenuManager:
         self.main_menu_elements = []
         self.main_buttons = {}
 
-        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
-        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
-        if canvas_width <= 1:
-            canvas_width = int(self.canvas.winfo_width())
-        if canvas_height <= 1:
-            canvas_height = int(self.canvas.winfo_height())
-        menu_width = int(canvas_width * 0.25)
+        disp_x, disp_y, disp_w, disp_h = self._get_display_rect()
+        menu_width = int(disp_w * 0.25)
         menu_height = 300
-        overlay_x = (canvas_width - menu_width) // 2
-        overlay_y = (canvas_height - menu_height) // 2
+        overlay_x = disp_x + (disp_w - menu_width) // 2
+        overlay_y = disp_y + (disp_h - menu_height) // 2
 
         panel_id = self.canvas.create_rectangle(
             overlay_x, overlay_y,
@@ -214,16 +218,11 @@ class MenuManager:
         self.main_menu_elements = []
         self.main_buttons = {}
 
-        canvas_width = int(getattr(self.game, 'window_width', self.canvas.winfo_width()))
-        canvas_height = int(getattr(self.game, 'window_height', self.canvas.winfo_height()))
-        if canvas_width <= 1:
-            canvas_width = int(self.canvas.winfo_width())
-        if canvas_height <= 1:
-            canvas_height = int(self.canvas.winfo_height())
-        menu_width = int(canvas_width * 0.35)
+        disp_x, disp_y, disp_w, disp_h = self._get_display_rect()
+        menu_width = int(disp_w * 0.35)
         menu_height = 280
-        overlay_x = (canvas_width - menu_width) // 2
-        overlay_y = (canvas_height - menu_height) // 2
+        overlay_x = disp_x + (disp_w - menu_width) // 2
+        overlay_y = disp_y + (disp_h - menu_height) // 2
 
         panel_id = self.canvas.create_rectangle(
             overlay_x, overlay_y,
@@ -328,10 +327,9 @@ class MenuManager:
             
             self.upgrade_choices = random.sample(available_upgrades, min(3, len(available_upgrades)))
             
-            # Create overlay - use actual canvas dimensions
-            canvas_width = int(self.canvas.winfo_width())
-            canvas_height = int(self.canvas.winfo_height())
-            menu_width = int(canvas_width * 0.15)  # 15% of canvas width
+            # Create overlay inside the game display area so contents keep 4:3 ratios
+            disp_x, disp_y, disp_w, disp_h = self._get_display_rect()
+            menu_width = int(disp_w * 0.15)  # 15% of display width
             
             # Calculate menu height dynamically based on number of buttons
             title_height = 50  # Title text height with padding
@@ -342,8 +340,8 @@ class MenuManager:
             
             menu_height = title_height + (num_buttons * button_height) + ((num_buttons - 1) * button_spacing) + padding
             
-            overlay_x = (canvas_width - menu_width) // 2
-            overlay_y = (canvas_height - menu_height) // 2
+            overlay_x = disp_x + (disp_w - menu_width) // 2
+            overlay_y = disp_y + (disp_h - menu_height) // 2
             overlay_width = menu_width
             overlay_height = menu_height
             

@@ -568,19 +568,23 @@ class Game:
 
         This ensures items created using logical coordinates remain visually aligned after window resize.
         """
-        # Rescale player
+        # Rescale player (use world->screen coords so sizes follow current transform)
         try:
             if hasattr(self, 'player') and self.player is not None:
                 px, py = self.player.get_center()
-                sx, sy = self.world_to_screen(px, py)
-                half = self.player.size // 2
-                self.canvas.coords(self.player.rect, sx - half, sy - half, sx + half, sy + half)
-                # Shield rings
+                # Compute world-space corners and map to screen to avoid manual scaling math
+                half_world = float(self.player.size) * 0.5
+                x1w, y1w = px - half_world, py - half_world
+                x2w, y2w = px + half_world, py + half_world
+                sx1, sy1 = self.world_to_screen(x1w, y1w)
+                sx2, sy2 = self.world_to_screen(x2w, y2w)
+                self.canvas.coords(self.player.rect, sx1, sy1, sx2, sy2)
+                # Shield rings (already specified in world units) - map via world_to_screen
                 if getattr(self.player, 'shield_rings', None):
                     for i, ring in enumerate(self.player.shield_rings):
                         if ring is None:
                             continue
-                        shield_radius = self.player.size // 2 + 15 + (i * 12)
+                        shield_radius = float(self.player.size) * 0.5 + 15.0 + (i * 12.0)
                         r1x, r1y = self.world_to_screen(px - shield_radius, py - shield_radius)
                         r2x, r2y = self.world_to_screen(px + shield_radius, py + shield_radius)
                         try:
@@ -624,10 +628,14 @@ class Game:
         for m in list(getattr(self, 'minions', [])):
             try:
                 mx, my = m.get_position()
-                sx, sy = self.world_to_screen(mx, my)
-                half = m.size // 2
+                # Use world->screen on corners so visual size follows display_scale
+                half_world = float(m.size) * 0.5
+                x1w, y1w = mx - half_world, my - half_world
+                x2w, y2w = mx + half_world, my + half_world
+                sx1, sy1 = self.world_to_screen(x1w, y1w)
+                sx2, sy2 = self.world_to_screen(x2w, y2w)
                 try:
-                    self.canvas.coords(m.rect, sx - half, sy - half, sx + half, sy + half)
+                    self.canvas.coords(m.rect, sx1, sy1, sx2, sy2)
                 except Exception:
                     pass
             except Exception:
@@ -642,10 +650,12 @@ class Game:
                     if px is None or py is None:
                         continue
                     sx, sy = self.world_to_screen(px, py)
-                    # Compute bounds based on visual size if available
-                    r = getattr(p, 'collision_radius', 4)
+                    # Compute bounds based on visual size (radius given in world units) and scale to screen
+                    r = float(getattr(p, 'collision_radius', 4))
+                    scale = self.display_scale if getattr(self, 'display_scale', 1.0) > 0 else 1.0
+                    sr = max(1.0, r * scale)
                     try:
-                        self.canvas.coords(p.rect, sx - r, sy - r, sx + r, sy + r)
+                        self.canvas.coords(p.rect, sx - sr, sy - sr, sx + sr, sy + sr)
                     except Exception:
                         pass
                 except Exception:

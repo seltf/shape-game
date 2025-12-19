@@ -354,7 +354,20 @@ class Player:
         except Exception:
             sx, sy = self.x, self.y
 
-        self.rect: int = self.canvas.create_oval(sx - size//2, sy - size//2, sx + size//2, sy + size//2, fill='blue')
+        # Create oval using world-space corners mapped to screen so size scales correctly
+        try:
+            half = float(size) * 0.5
+            if getattr(self, 'game', None) is not None:
+                s1x, s1y = self.game.world_to_screen(self.x - half, self.y - half)
+                s2x, s2y = self.game.world_to_screen(self.x + half, self.y + half)
+            else:
+                s1x, s1y = sx - half, sy - half
+                s2x, s2y = sx + half, sy + half
+        except Exception:
+            s1x, s1y = sx - size//2, sy - size//2
+            s2x, s2y = sx + size//2, sy + size//2
+
+        self.rect: int = self.canvas.create_oval(s1x, s1y, s2x, s2y, fill='blue')
 
     def move(self, accel_x: float, accel_y: float, speed_boost: float = 0, window_width: Optional[int] = None, window_height: Optional[int] = None) -> None:
         """Apply acceleration to player velocity and update position."""
@@ -397,34 +410,35 @@ class Player:
         interp_y = self.prev_y + (self.y - self.prev_y) * interpolation_factor
         # Apply display transform (use Game.world_to_screen for correctness)
         try:
-            sx, sy = self.game.world_to_screen(interp_x, interp_y)
-            dx1 = sx - (self.size // 2)
-            dy1 = sy - (self.size // 2)
-            dx2 = sx + (self.size // 2)
-            dy2 = sy + (self.size // 2)
-            self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
+            # Compute world-space corners and map to screen to respect display_scale
+            half_world = float(self.size) * 0.5
+            x1w, y1w = interp_x - half_world, interp_y - half_world
+            x2w, y2w = interp_x + half_world, interp_y + half_world
+            sx1, sy1 = self.game.world_to_screen(x1w, y1w)
+            sx2, sy2 = self.game.world_to_screen(x2w, y2w)
+            self.canvas.coords(self.rect, sx1, sy1, sx2, sy2)
 
             # Update shield rings if active using world_to_screen for consistency
             if self.shield_rings:
                 for i, ring in enumerate(self.shield_rings):
                     if ring is not None:
-                        shield_radius = self.size // 2 + 15 + (i * 12)
+                        shield_radius = float(self.size) * 0.5 + 15.0 + (i * 12.0)
                         try:
                             r1x, r1y = self.game.world_to_screen(interp_x - shield_radius, interp_y - shield_radius)
                             r2x, r2y = self.game.world_to_screen(interp_x + shield_radius, interp_y + shield_radius)
                             self.canvas.coords(ring, r1x, r1y, r2x, r2y)
                         except Exception:
-                            # If world_to_screen fails for some reason, fall back to manual scale math below
                             raise
         except Exception:
             # Fallback path: manual scaling when game transform not available
             scale = getattr(self, 'game', None).display_scale if hasattr(self, 'game') else 1.0
             off_x = getattr(self, 'game', None).offset_x if hasattr(self, 'game') else 0.0
             off_y = getattr(self, 'game', None).offset_y if hasattr(self, 'game') else 0.0
-            dx1 = off_x + (interp_x - self.size//2) * scale
-            dy1 = off_y + (interp_y - self.size//2) * scale
-            dx2 = off_x + (interp_x + self.size//2) * scale
-            dy2 = off_y + (interp_y + self.size//2) * scale
+            half = float(self.size) * 0.5
+            dx1 = off_x + (interp_x - half) * scale
+            dy1 = off_y + (interp_y - half) * scale
+            dx2 = off_x + (interp_x + half) * scale
+            dy2 = off_y + (interp_y + half) * scale
             try:
                 self.canvas.coords(self.rect, dx1, dy1, dx2, dy2)
             except Exception:
@@ -434,7 +448,7 @@ class Player:
             if self.shield_rings:
                 for i, ring in enumerate(self.shield_rings):
                     if ring is not None:
-                        shield_radius = self.size // 2 + 15 + (i * 12)
+                        shield_radius = float(self.size) * 0.5 + 15.0 + (i * 12.0)
                         rx1 = off_x + (interp_x - shield_radius) * scale
                         ry1 = off_y + (interp_y - shield_radius) * scale
                         rx2 = off_x + (interp_x + shield_radius) * scale
@@ -452,12 +466,18 @@ class Player:
             # Create rings based on shield level
             self.shield_rings = []
             for i in range(self.shield_level):
-                shield_radius = self.size // 2 + 15 + (i * 12)
-                ring = self.canvas.create_oval(
-                    self.x - shield_radius, self.y - shield_radius,
-                    self.x + shield_radius, self.y + shield_radius,
-                    outline='cyan', width=2
-                )
+                shield_radius = float(self.size) * 0.5 + 15.0 + (i * 12.0)
+                try:
+                    r1x, r1y = self.game.world_to_screen(self.x - shield_radius, self.y - shield_radius)
+                    r2x, r2y = self.game.world_to_screen(self.x + shield_radius, self.y + shield_radius)
+                    ring = self.canvas.create_oval(r1x, r1y, r2x, r2y, outline='cyan', width=2)
+                except Exception:
+                    # Fallback to raw coords if transform unavailable
+                    ring = self.canvas.create_oval(
+                        self.x - shield_radius, self.y - shield_radius,
+                        self.x + shield_radius, self.y + shield_radius,
+                        outline='cyan', width=2
+                    )
                 self.shield_rings.append(ring)
 
     def deactivate_shield(self, enemy: Optional[Any] = None) -> None:
@@ -1482,12 +1502,19 @@ class Projectile(BaseEntity):
         self.y: float = y
         self.vx: float = vx
         self.vy: float = vy
+        # Collision radius in world units (logical). Drawing will scale this by display transform.
+        self.collision_radius: float = 4.0
         # Create visual using world->screen transform so it remains consistent after resize
         try:
             sx, sy = self.game.world_to_screen(self.x, self.y)
         except Exception:
             sx, sy = self.x, self.y
-        self.rect: int = self.canvas.create_oval(sx-4, sy-4, sx+4, sy+4, fill='yellow')
+        try:
+            scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+            sr = max(1.0, self.collision_radius * scale)
+            self.rect: int = self.canvas.create_oval(sx - sr, sy - sr, sx + sr, sy + sr, fill='yellow')
+        except Exception:
+            self.rect: int = self.canvas.create_oval(sx-4, sy-4, sx+4, sy+4, fill='yellow')
         self.hit_enemies: Set[int] = set()  # Track enemies already hit
         self.bounces: int = 0
         # Get weapon stats from game's computed stats
@@ -1537,7 +1564,9 @@ class Projectile(BaseEntity):
                 self.y += (dy / dist) * move_distance
             try:
                 sx, sy = self.game.world_to_screen(self.x, self.y)
-                self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+                scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+                sr = max(1.0, self.collision_radius * scale)
+                self.canvas.coords(self.rect, sx - sr, sy - sr, sx + sr, sy + sr)
             except Exception:
                 self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
             # Change color to cyan when returning
@@ -1574,7 +1603,9 @@ class Projectile(BaseEntity):
         # Render-time: update using world->screen transform
         try:
             sx, sy = self.game.world_to_screen(self.x, self.y)
-            self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+            scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+            sr = max(1.0, self.collision_radius * scale)
+            self.canvas.coords(self.rect, sx - sr, sy - sr, sx + sr, sy + sr)
         except Exception:
             try:
                 self.canvas.coords(self.rect, self.x-4, self.y-4, self.x+4, self.y+4)
@@ -1744,7 +1775,9 @@ class Projectile(BaseEntity):
         # Update visual position for non-returning projectile as well
         try:
             sx, sy = self.game.world_to_screen(self.x, self.y)
-            self.canvas.coords(self.rect, sx-4, sy-4, sx+4, sy+4)
+            scale = self.game.display_scale if getattr(self.game, 'display_scale', 1.0) > 0 else 1.0
+            sr = max(1.0, self.collision_radius * scale)
+            self.canvas.coords(self.rect, sx - sr, sy - sr, sx + sr, sy + sr)
         except Exception:
             pass
 
